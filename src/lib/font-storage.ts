@@ -1,3 +1,5 @@
+import { validateFontBytes } from "./font-loader";
+
 /** Browser-only operations: nothing opens IndexedDB during server rendering. */
 export const DATABASE_NAME = "wayoffmars-fonts";
 export const DATABASE_VERSION = 1;
@@ -27,6 +29,7 @@ export async function validateSavedFont(value: unknown): Promise<SavedFont> {
       !Number.isFinite(font.addedAt) || font.addedAt < 0) {
     throw new Error("Invalid saved font metadata. Its stored data has been kept.");
   }
+  validateFontBytes(font.bytes);
   if (await fontIdentity(font.bytes) !== font.id) throw new Error("Saved font checksum mismatch. Its stored data has been kept.");
   return font;
 }
@@ -63,28 +66,33 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-export async function readSavedFonts(): Promise<unknown[]> {
+/** All operations close their connection, including synchronous request failures. */
+async function transact<T>(mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const database = await openDatabase();
   return new Promise((resolve, reject) => {
-    let transaction: IDBTransaction;
-    try { transaction = database.transaction(STORE, "readonly"); }
-    catch (error) { database.close(); reject(error); return; }
-    const request = transaction.objectStore(STORE).getAll();
-    transaction.oncomplete = () => { database.close(); resolve(request.result); };
-    transaction.onabort = () => { database.close(); reject(transaction.error); };
+    let transaction: IDBTransaction | undefined;
+    try {
+      transaction = database.transaction(STORE, mode);
+      const request = operation(transaction.objectStore(STORE));
+      transaction.oncomplete = () => { database.close(); resolve(request.result); };
+      transaction.onabort = () => {
+        database.close(); reject(transaction?.error ?? new Error("Browser storage operation was aborted. Retry saving."));
+      };
+    } catch (error) {
+      transaction?.abort(); database.close(); reject(error);
+    }
   });
 }
 
+export function readSavedFonts(): Promise<unknown[]> {
+  return transact("readonly", (store) => store.getAll());
+}
+
 export async function saveFont(font: SavedFont): Promise<void> {
-  const database = await openDatabase();
-  return new Promise((resolve, reject) => {
-    let transaction: IDBTransaction;
-    try {
-      transaction = database.transaction(STORE, "readwrite");
-      transaction.objectStore(STORE).put(font);
-    } catch (error) { database.close(); reject(error); return; }
-    // Request success is provisional; only transaction completion means saved.
-    transaction.oncomplete = () => { database.close(); resolve(); };
-    transaction.onabort = () => { database.close(); reject(transaction.error); };
-  });
+  // Request success is provisional; only transaction completion means saved.
+  await transact("readwrite", (store) => store.put(font));
+}
+
+export async function removeSavedFont(id: IDBValidKey): Promise<void> {
+  await transact("readwrite", (store) => store.delete(id));
 }

@@ -10,6 +10,7 @@ const FONT_SIGNATURES = new Set([
 
 /** Read and decode a font in the browser. Registration belongs to the caller. */
 export async function readFont(file: File): Promise<ArrayBuffer> {
+  if (file.name.length > 512) throw new Error("This font filename is too long.");
   if (!FONT_EXTENSION.test(file.name)) {
     throw new Error("Choose a TTF, OTF, WOFF or WOFF2 font file.");
   }

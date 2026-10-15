@@ -1,29 +1,63 @@
 # wayoffmars
 
-A personal graphic-design tool, starting with a font library.
+A personal font library built with Next.js, React and TypeScript. Choose or drop
+TTF, OTF, WOFF and WOFF2 files (up to 20 MiB each) to preview them in the browser.
 
-## Local development
+## Daily development
 
-Use Node.js 22 (the scaffold was created with Node.js 22.16.0) and npm.
+Use Node.js 22 and npm:
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Open http://localhost:3000. If that port is occupied, Next.js reports the port it uses in the terminal.
+Open http://localhost:3000. Next.js reports a different port if 3000 is occupied.
+Source edits refresh the page automatically. Use native development for daily
+work; a production build is available with `npm run build` then `npm start`.
 
-## Current scope
+## Your font library
 
-- Next.js App Router, React, TypeScript, ESLint, and plain CSS.
-- A responsive library page with an empty state.
-- A file picker and drop area for TTF, OTF, WOFF, and WOFF2 fonts (up to 20 MiB each).
-- In-memory font loading through the browser FontFace API, with lorem ipsum previews in each loaded font.
-- Per-file loading and error feedback. Failed files do not prevent other previews from loading.
+- Font bytes, filenames, sizes and import dates are saved in IndexedDB (schema
+  version 1). A SHA-256 content hash is the stable identity. Renamed copies are
+  skipped; different font bytes/formats remain separate entries.
+- “Saved in this browser” appears only after the storage transaction completes.
+  Storage failures leave a usable preview with “Retry saving”. One bad file or
+  saved record does not prevent healthy fonts from loading. Damaged saved records
+  are kept; dismissing an error only hides its row for this page session.
+- Change preview text or size for the current page. These controls reset on a new
+  page or refresh and are not part of backups.
+- Remove deletes a saved font after the deletion commits and unregisters its
+  preview. “Undo removal” restores the most recently removed font until the next
+  removal or refresh. Keep a backup before larger changes.
+- Export backup downloads a JSON file containing a version 1 manifest plus the
+  complete font bytes as base64. The manifest records `format`, `version`, export
+  time and each font’s hash, filename, byte size and import date. Backups are
+  unencrypted and contain the fonts themselves; observe the fonts’ licenses.
+- Import backup merges into the current library. It validates the envelope,
+  metadata, byte sizes, SHA-256 hashes, signatures and browser decoding. Duplicates
+  are skipped; invalid entries get individual errors while valid entries restore.
+  Backups support up to 500 fonts and 100 MiB per file (base64 adds about one third
+  to the original size). Export includes preview-only fonts. Unreadable saved
+  records are explicitly reported as omitted and kept in storage. If storage
+  cannot be read, export can back up currently loaded fonts with a partial-backup
+  warning.
 
-Files are checked for supported extensions, nonempty content, size, and a recognized font signature before the browser attempts to decode them. Browser decoding determines whether a font can be previewed. Filenames label the previews; internal font metadata is not extracted.
+Files are never uploaded. Storage belongs to one **browser profile and origin**:
+protocol, hostname and port all matter. `localhost:3000`, `127.0.0.1:3000` and
+`localhost:3001` have separate libraries. Switching profiles or opening another
+address does not carry your fonts over; export/import a backup to transfer them.
+Other open tabs see changes after refresh, without live synchronization.
 
-Fonts stay in memory in the current tab. Refreshing clears the library. Files are not uploaded or saved. IndexedDB persistence, Docker, accounts, and cloud services remain future work.
+Browser storage is not a permanent archive. Clearing site data, private browsing,
+profile deletion, browser eviction, disk failures or quota limits can erase or
+prevent saving fonts. Keep the original files and independent backups. Docker
+will serve the app; it does not store or back up your browser’s font data.
+
+Files are checked for extension, size and signature, then decoded with FontFace.
+Filenames label previews; internal font naming metadata is not extracted. Unsupported
+characters can still fall back to another font; the tests verify actual custom
+Latin glyph rendering with the included fixtures.
 
 ## Checks
 
@@ -31,25 +65,25 @@ Fonts stay in memory in the current tab. Refreshing clears the library. Files ar
 npm run lint
 npm run typecheck
 npm run build
+npm test
 ```
 
-To serve a production build locally, run `npm run build` followed by `npm start`.
+`npm test` uses installed Google Chrome through Playwright, with fresh isolated
+contexts. It reuses a running localhost:3000 dev server or starts one. It never
+clears your normal Chrome profile or saved fonts. Set
+`TEST_BASE_URL=http://localhost:3001 npm test` to test another running instance.
+No browser is downloaded by `npm ci`. Screenshots/results go under
+`/tmp/wayoffmars-*`, outside the repository.
 
-At setup, `npm audit --omit=dev` reports no production vulnerabilities. The full audit reports five high-severity findings in the ESLint dependency chain through `braces`; npm's suggested fix downgrades the Next.js lint configuration across major versions and has not been applied.
+The tests use licensed real Adobe Source Serif TTF, OTF, WOFF and WOFF2 fixtures
+(see `tests/fixtures/fonts/README.md`). Chrome's rendered-glyph inspection checks
+custom font use beyond CSS or FontFace load status. Coverage includes picker and
+simulated drop imports, invalid/mixed batches, duplicates, persistence, mobile
+width, file/database read failures, quota, transaction aborts, blocked storage,
+damaged saved records, controls, removal/undo and backup restoration. Simulated
+drops do not prove physical OS/Finder dragging works.
 
-## Browser regression tests
-
-`npm test` runs Playwright using installed Google Chrome, with a fresh isolated
-browser context for each test. It reuses a running localhost:3000 dev server or
-starts one. It never clears your normal Chrome profile or its saved fonts.
-Set `TEST_BASE_URL=http://localhost:3001` to test another running instance.
-Screenshots/results go under `/tmp/wayoffmars-*`, outside the repository.
-Chrome must be installed; no browser is downloaded by npm install.
-
-The suite uses licensed real Adobe Source Serif TTF, OTF, WOFF and WOFF2 fixtures
-(see `tests/fixtures/fonts/README.md`). Chrome's rendered-glyph inspection verifies
-custom-font glyph use, beyond checking CSS or FontFace load status. Tests cover
-picker imports, simulated file drops, invalid and mixed batches, same-content
-duplicates, refresh/reopened pages, mobile width, file read errors, quota errors,
-transaction aborts, blocked storage, database reads and damaged saved records.
-A simulated drop does not prove physical OS/Finder dragging works.
+The existing five high-severity npm audit findings are in the development ESLint
+chain through `braces`. npm's suggested fix changes major lint-configuration
+versions and has not been applied. Check `npm audit --omit=dev` separately for the
+production dependency set.

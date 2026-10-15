@@ -23,9 +23,13 @@ async function proveGlyphs(page: Page, count: number) {
   const { root } = await session.send("DOM.getDocument");
   const { nodeIds } = await session.send("DOM.querySelectorAll", { nodeId: root.nodeId, selector: ".font-sample" });
   expect(nodeIds).toHaveLength(count);
-  for (const nodeId of nodeIds) {
-    const { fonts } = await session.send("CSS.getPlatformFontsForNode", { nodeId });
-    expect(fonts.some((font) => font.isCustomFont && font.glyphCount > 0 && /Source Serif/i.test(font.familyName))).toBe(true);
+  for (const [index, nodeId] of nodeIds.entries()) {
+    // Below-the-fold samples may not have been shaped yet. Inspect each after scrolling it into view.
+    await page.locator(".font-sample").nth(index).scrollIntoViewIfNeeded();
+    await expect.poll(async () => {
+      const { fonts } = await session.send("CSS.getPlatformFontsForNode", { nodeId });
+      return fonts.some((font) => font.isCustomFont && font.glyphCount > 0 && /Source Serif/i.test(font.familyName));
+    }).toBe(true);
   }
   await session.detach();
 }
@@ -154,4 +158,117 @@ test("text drags do not highlight and file drags reset on leave", async ({ page 
   const file = await page.evaluateHandle(() => { const data = new DataTransfer(); data.items.add(new File(["invalid"], "test.ttf")); return data; });
   await zone.dispatchEvent("dragover", { dataTransfer: file }); await expect(zone).toHaveClass(/is-dragging/);
   await zone.dispatchEvent("dragleave", { relatedTarget: null }); await expect(zone).not.toHaveClass(/is-dragging/);
+});
+
+test("preview text and size update loaded fonts at desktop and mobile widths", async ({ page }) => {
+  await ready(page); await picker(page).setInputFiles(fixture("ttf")); await expect(saved(page)).toHaveCount(1);
+  await page.getByRole("textbox", { name: "Preview text", exact: true }).fill("Type you collect.\nHamburgefontsiv 0123456789");
+  await page.getByRole("slider", { name: /Preview size/ }).press("End");
+  await expect(page.locator(".font-sample")).toHaveText("Type you collect.\nHamburgefontsiv 0123456789");
+  await expect(page.locator(".font-sample")).toHaveCSS("font-size", "96px"); await proveGlyphs(page, 1);
+  await page.screenshot({ path: "/tmp/wayoffmars-controls-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "/tmp/wayoffmars-controls-mobile.png", fullPage: true });
+});
+
+test("remove unregisters font, undo restores it, and committed removal survives refresh", async ({ page }) => {
+  await ready(page); await picker(page).setInputFiles(fixture("ttf")); await expect(saved(page)).toHaveCount(1);
+  const family = await page.locator(".font-sample").evaluate(el => getComputedStyle(el).fontFamily);
+  await page.getByRole("button", { name: "Remove SourceSerif4-Regular.ttf", exact: true }).click();
+  await expect(page.locator(".font-row")).toHaveCount(0);
+  expect(await page.evaluate(family => Array.from(document.fonts).some(font => font.family === family.replaceAll('"', '')), family)).toBe(false);
+  await page.getByRole("button", { name: "Undo removal" }).click(); await expect(saved(page)).toHaveCount(1); await proveGlyphs(page, 1);
+  await page.reload(); await expect(saved(page)).toHaveCount(1);
+  await page.getByRole("button", { name: "Remove SourceSerif4-Regular.ttf", exact: true }).click();
+  await expect(page.locator(".font-row")).toHaveCount(0); await page.reload(); await expect(page.locator(".font-row")).toHaveCount(0);
+});
+
+test("failed removal keeps the saved row and its rendered font", async ({ page }) => {
+  await page.addInitScript(() => { IDBObjectStore.prototype.delete = () => { throw new Error("Delete failed"); }; });
+  await ready(page); await picker(page).setInputFiles(fixture("ttf")); await expect(saved(page)).toHaveCount(1);
+  await page.getByRole("button", { name: "Remove SourceSerif4-Regular.ttf", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Font could not be removed");
+  await expect(saved(page)).toHaveCount(1); await proveGlyphs(page, 1);
+});
+
+test("backup contains exact font bytes and versioned metadata; fresh-profile restoration deduplicates", async ({ page, browser }) => {
+  await ready(page); await picker(page).setInputFiles([fixture("ttf"), fixture("woff2")]); await expect(saved(page)).toHaveCount(2);
+  const downloadEvent = page.waitForEvent("download"); await page.getByRole("button", { name: "Export backup", exact: true }).click();
+  const download = await downloadEvent; const backupPath = await download.path(); expect(backupPath).toBeTruthy();
+  const backup = JSON.parse(await readFile(backupPath!, "utf8"));
+  expect(backup.format).toBe("wayoffmars-font-backup"); expect(backup.version).toBe(1); expect(backup.fonts).toHaveLength(2);
+  for (const entry of backup.fonts) {
+    expect(Buffer.from(entry.data, "base64")).toEqual(await readFile(path.join(__dirname, "fixtures/fonts", entry.name)));
+    expect(entry.size).toBe(Buffer.from(entry.data, "base64").length);
+    expect(entry.id).toMatch(/^[a-f0-9]{64}$/); expect(entry.addedAt).toBeGreaterThan(0);
+  }
+  const isolated = await browser.newContext(); const restored = await isolated.newPage();
+  try {
+    await ready(restored); await expect(restored.locator(".font-row")).toHaveCount(0);
+    await restored.getByLabel("Choose backup file", { exact: true }).setInputFiles(backupPath!);
+    await expect(saved(restored)).toHaveCount(2); await proveGlyphs(restored, 2);
+    await restored.reload(); await expect(saved(restored)).toHaveCount(2);
+    await restored.getByLabel("Choose backup file", { exact: true }).setInputFiles(backupPath!);
+    await expect(restored.getByRole("status")).toContainText("2 duplicate files skipped");
+    await expect(restored.locator(".font-row")).toHaveCount(2);
+    const metadata = await restored.evaluate(() => new Promise<unknown[]>(resolve => {
+      const request = indexedDB.open("wayoffmars-fonts", 1); request.onsuccess = () => {
+        const db = request.result, tx = db.transaction("fonts"), read = tx.objectStore("fonts").getAll();
+        tx.oncomplete = () => { db.close(); resolve(read.result.map(({ bytes, ...rest }: { bytes: ArrayBuffer }) => ({ ...rest, size: bytes.byteLength }))); };
+      };
+    }));
+    expect(metadata).toEqual(expect.arrayContaining(backup.fonts.map(({ id, name, size, addedAt }: { id: string; name: string; size: number; addedAt: number }) => ({ id, name, size, addedAt }))));
+  } finally { await isolated.close(); }
+  await expect(saved(page)).toHaveCount(2);
+});
+
+test("backup restoration keeps mixed-entry successes and rejects bad checksums, metadata and bytes", async ({ page }) => {
+  const bytes = await readFile(fixture("ttf"));
+  const { createHash } = await import("node:crypto");
+  const valid = { id: createHash("sha256").update(bytes).digest("hex"), name: "backup.ttf", size: bytes.length, addedAt: Date.now(), encoding: "base64", data: bytes.toString("base64") };
+  const manifest = { format: "wayoffmars-font-backup", version: 1, fonts: [valid,
+    { ...valid, id: "a".repeat(64) }, { ...valid, size: 7 }, { ...valid, data: "not base64!" }, { ...valid, name: "renamed.ttf" },
+  ] };
+  await ready(page); await page.getByLabel("Choose backup file", { exact: true }).setInputFiles({ name: "mixed.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(manifest)) });
+  await expect(saved(page)).toHaveCount(1); await expect(page.locator(".font-error")).toHaveCount(3);
+  await expect(page.getByRole("status")).toContainText("1 duplicate file skipped");
+  await proveGlyphs(page, 1); await page.reload(); await expect(page.locator(".font-row")).toHaveCount(1);
+});
+
+test("invalid backup envelopes make no changes to an existing library", async ({ page }) => {
+  await ready(page); await picker(page).setInputFiles(fixture("ttf")); await expect(saved(page)).toHaveCount(1);
+  for (const data of ["not-json", JSON.stringify({ format: "wayoffmars-font-backup", version: 999, fonts: [] }), JSON.stringify({ format: "wayoffmars-font-backup", version: 1, fonts: {} })]) {
+    await page.getByLabel("Choose backup file", { exact: true }).setInputFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from(data) });
+    await expect(page.getByRole("status")).toContainText(/backup/i);
+    await expect(page.getByRole("button", { name: "Import backup", exact: true })).toBeEnabled();
+    await expect(saved(page)).toHaveCount(1);
+  }
+});
+
+test("export includes preview-only fonts after a quota failure", async ({ page }) => {
+  await page.addInitScript(() => { IDBObjectStore.prototype.put = () => { throw new DOMException("quota", "QuotaExceededError"); }; });
+  await ready(page); await picker(page).setInputFiles(fixture("ttf"));
+  await expect(page.getByText("Preview only — not saved", { exact: true })).toBeVisible();
+  const downloadEvent = page.waitForEvent("download"); await page.getByRole("button", { name: "Export backup", exact: true }).click();
+  const download = await downloadEvent, backupPath = await download.path();
+  const backup = JSON.parse(await readFile(backupPath!, "utf8")); expect(backup.fonts).toHaveLength(1);
+  expect(Buffer.from(backup.fonts[0].data, "base64")).toEqual(await readFile(fixture("ttf")));
+});
+
+test("newer database versions stay intact and give update guidance", async ({ page }) => {
+  await ready(page); await picker(page).setInputFiles(fixture("ttf")); await expect(saved(page)).toHaveCount(1);
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open("wayoffmars-fonts", 2);
+    request.onsuccess = () => { request.result.close(); resolve(); }; request.onerror = () => reject(request.error);
+  }));
+  await page.reload(); await expect(page.getByRole("status")).toContainText("newer app version");
+  await picker(page).setInputFiles(fixture("otf"));
+  await expect(page.getByText("Preview only — not saved", { exact: true })).toBeVisible();
+  const count = await page.evaluate(() => new Promise<number>(resolve => {
+    const request = indexedDB.open("wayoffmars-fonts", 2); request.onsuccess = () => {
+      const db = request.result, tx = db.transaction("fonts"), read = tx.objectStore("fonts").count();
+      tx.oncomplete = () => { db.close(); resolve(read.result); };
+    };
+  })); expect(count).toBe(1);
 });
