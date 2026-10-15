@@ -9,7 +9,7 @@ const FONT_SIGNATURES = new Set([
 ]);
 
 /** Read and decode a font in the browser. Registration belongs to the caller. */
-export async function loadFont(file: File, family: string): Promise<FontFace> {
+export async function readFont(file: File): Promise<ArrayBuffer> {
   if (!FONT_EXTENSION.test(file.name)) {
     throw new Error("Choose a TTF, OTF, WOFF or WOFF2 font file.");
   }
@@ -19,10 +19,6 @@ export async function loadFont(file: File, family: string): Promise<FontFace> {
   if (file.size > MAX_FONT_BYTES) {
     throw new Error("This file is too large. Choose a font smaller than 20 MiB.");
   }
-  if (typeof FontFace === "undefined") {
-    throw new Error("This browser does not support font previews.");
-  }
-
   let bytes: ArrayBuffer;
   try {
     bytes = await file.arrayBuffer();
@@ -30,13 +26,25 @@ export async function loadFont(file: File, family: string): Promise<FontFace> {
     throw new Error("This file could not be read. Try choosing it again.");
   }
 
-  if (
+  validateFontBytes(bytes);
+  return bytes;
+}
+
+export function validateFontBytes(bytes: ArrayBuffer) {
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_FONT_BYTES ||
     bytes.byteLength < 4 ||
     !FONT_SIGNATURES.has(new DataView(bytes).getUint32(0))
   ) {
     throw new Error("This file does not contain a supported font.");
   }
 
+}
+
+export async function loadFontBytes(bytes: ArrayBuffer, family: string): Promise<FontFace> {
+  validateFontBytes(bytes);
+  if (typeof FontFace === "undefined") {
+    throw new Error("This browser does not support font previews.");
+  }
   try {
     const face = new FontFace(family, bytes);
     return await face.load();
@@ -45,4 +53,8 @@ export async function loadFont(file: File, family: string): Promise<FontFace> {
       "The browser could not decode this font. It may be damaged or unsupported.",
     );
   }
+}
+
+export async function loadFont(file: File, family: string): Promise<FontFace> {
+  return loadFontBytes(await readFont(file), family);
 }

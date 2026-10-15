@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { loadFont } from "@/lib/font-loader";
+import { loadFontBytes, readFont } from "@/lib/font-loader";
+import { fontIdentity, readSavedFonts, saveFont } from "@/lib/font-storage";
 
 type PreviewFont = {
   id: string;
   name: string;
 } & (
   | { status: "loading" }
-  | { status: "ready"; family: string }
+  | { status: "ready"; family: string; saved: boolean }
   | { status: "error"; message: string }
 );
 
@@ -19,11 +20,38 @@ export function FontLibrary() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [fonts, setFonts] = useState<PreviewFont[]>([]);
+  const [isRestoring, setIsRestoring] = useState(true);
+  const [storageMessage, setStorageMessage] = useState("");
   const loadedFaces = useRef(new Map<string, FontFace>());
   const generation = useRef(0);
 
   useEffect(() => {
     const faces = loadedFaces.current;
+    const currentGeneration = generation.current;
+    async function restore() {
+      try {
+        const saved = await readSavedFonts();
+        for (const font of saved) {
+          if (generation.current !== currentGeneration) return;
+          try {
+            const family = `wayoffmars-${font.id}`;
+            const face = await loadFontBytes(font.bytes, family);
+            if (generation.current !== currentGeneration) return;
+            document.fonts.add(face);
+            faces.set(font.id, face);
+            setFonts((previous) => [...previous, { id: font.id, name: font.name, status: "ready", family, saved: true }]);
+          } catch {
+            if (generation.current !== currentGeneration) return;
+            setFonts((previous) => [...previous, { id: font.id, name: font.name, status: "error", message: "This saved font could not be loaded. Its stored data has been kept." }]);
+          }
+        }
+      } catch {
+        if (generation.current === currentGeneration) setStorageMessage("Saved fonts could not be read. You can still preview new files.");
+      } finally {
+        if (generation.current === currentGeneration) setIsRestoring(false);
+      }
+    }
+    void restore();
     return () => {
       // An in-flight load must not register a font after this library unmounts.
       generation.current += 1;
@@ -58,11 +86,21 @@ export function FontLibrary() {
 
       let result: PreviewFont;
       try {
-        const face = await loadFont(file, id);
+        const bytes = await readFont(file);
+        const identity = await fontIdentity(bytes);
+        const family = `wayoffmars-${identity}`;
+        const face = await loadFontBytes(bytes, family);
+        let saved = false;
+        try {
+          await saveFont({ id: identity, name: file.name, bytes, size: bytes.byteLength, addedAt: Date.now() });
+          saved = true;
+        } catch {
+          setStorageMessage("A font could not be saved. Keep its original file before closing this page.");
+        }
         if (generation.current !== currentGeneration) return;
         document.fonts.add(face);
-        loadedFaces.current.set(id, face);
-        result = { id, name: file.name, status: "ready", family: id };
+        loadedFaces.current.set(identity, face);
+        result = { id: identity, name: file.name, status: "ready", family, saved };
       } catch (error) {
         if (generation.current !== currentGeneration) return;
         result = {
@@ -119,6 +157,7 @@ export function FontLibrary() {
           type="file"
           accept=".ttf,.otf,.woff,.woff2"
           multiple
+          disabled={isRestoring}
           hidden
           aria-label="Choose font files"
           onChange={(event) => {
@@ -131,6 +170,7 @@ export function FontLibrary() {
         <button
           type="button"
           className="primary-button"
+          disabled={isRestoring}
           aria-describedby="selection-note"
           onClick={() => inputRef.current?.click()}
         >
@@ -140,9 +180,10 @@ export function FontLibrary() {
 
       <div className="selection-feedback" role="status" aria-atomic="true">
         <p id="selection-note" className="selection-note">
-          {fonts.length > 0
-            ? `${readyCount} ${readyCount === 1 ? "font" : "fonts"} ready to preview.${loadingCount > 0 ? ` ${loadingCount} loading.` : ""}${errorCount > 0 ? ` ${errorCount} could not be loaded.` : ""} Refreshing clears your library.`
-            : "Preview fonts in this tab. Refreshing clears your library."}
+          {isRestoring ? "Loading saved fonts…" : fonts.length > 0
+            ? `${readyCount} ${readyCount === 1 ? "font" : "fonts"} ready to preview.${loadingCount > 0 ? ` ${loadingCount} loading.` : ""}${errorCount > 0 ? ` ${errorCount} could not be loaded.` : ""} Saved fonts stay in this browser.`
+            : "Fonts are saved locally in this browser. Files are never uploaded."}
+          {storageMessage ? ` ${storageMessage}` : ""}
         </p>
       </div>
 
@@ -164,9 +205,9 @@ export function FontLibrary() {
               <li key={font.id} className="font-row" aria-busy={font.status === "loading"}>
                 <h3>{font.name}</h3>
                 {font.status === "ready" ? (
-                  <p className="font-sample" style={{ fontFamily: `"${font.family}"` }}>
+                  <><p className="selection-note">{font.saved ? "Saved in this browser" : "Preview only — not saved"}</p><p className="font-sample" style={{ fontFamily: `"${font.family}"` }}>
                     {SAMPLE_TEXT}
-                  </p>
+                  </p></>
                 ) : (
                   <p className={font.status === "error" ? "font-error" : "font-loading"}>
                     {font.status === "error" ? font.message : "Loading font…"}
