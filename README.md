@@ -16,6 +16,50 @@ Open http://localhost:3000. Next.js reports a different port if 3000 is occupied
 Source edits refresh the page automatically. Use native development for daily
 work; a production build is available with `npm run build` then `npm start`.
 
+## Docker: run the production app
+
+Start Docker Desktop first. An **image** is the built application package; a
+**container** is a running instance of it. The Dockerfile installs the lockfile
+with `npm ci`, builds Next.js standalone output, then copies only runtime files
+and static/public assets into the final stage. It runs as the non-root `node` user.
+
+From this project folder:
+
+```bash
+docker build -t wayoffmars:local .
+docker run --rm -d --name wayoffmars -p 127.0.0.1:3001:3000 wayoffmars:local
+```
+
+Open http://localhost:3001. In `127.0.0.1:3001:3000`, the app listens on port
+**3000 inside** the container and Docker makes it available at **3001 on your
+computer**. The `127.0.0.1` binding keeps it local. `EXPOSE 3000` documents the
+internal port; `-p` publishes it. If 3001 is busy, use another host port such as
+`127.0.0.1:3002:3000` and open localhost:3002.
+
+```bash
+docker ps                         # running containers and health
+docker logs wayoffmars             # server output
+docker stop wayoffmars             # stop; --rm also removes this container
+```
+
+A container uses the source captured at build time. After edits, rebuild the
+image and create a new container; restarting the old one keeps its old code:
+
+```bash
+docker build -t wayoffmars:local .
+docker stop wayoffmars
+docker run --rm -d --name wayoffmars -p 127.0.0.1:3001:3000 wayoffmars:local
+```
+
+Skip the stop command if it is already stopped. For daily editing, use
+`npm run dev` on your computer for automatic refresh; Docker here packages a
+production build. No font-data volume is required because fonts live in the
+browser. Changing the host port changes the library’s origin; use a backup to
+transfer fonts from localhost:3000 to localhost:3001.
+
+See Docker’s [multi-stage build guide](https://docs.docker.com/build/building/multi-stage/)
+and [port publishing guide](https://docs.docker.com/get-started/docker-concepts/running-containers/publishing-ports/).
+
 ## Your font library
 
 - Font bytes, filenames, sizes and import dates are saved in IndexedDB (schema
