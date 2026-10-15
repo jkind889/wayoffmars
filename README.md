@@ -36,3 +36,20 @@ npm run build
 To serve a production build locally, run `npm run build` followed by `npm start`.
 
 At setup, `npm audit --omit=dev` reports no production vulnerabilities. The full audit reports five high-severity findings in the ESLint dependency chain through `braces`; npm's suggested fix downgrades the Next.js lint configuration across major versions and has not been applied.
+
+## Browser regression tests
+
+`npm test` runs Playwright using installed Google Chrome, with a fresh isolated
+browser context for each test. It reuses a running localhost:3000 dev server or
+starts one. It never clears your normal Chrome profile or its saved fonts.
+Set `TEST_BASE_URL=http://localhost:3001` to test another running instance.
+Screenshots/results go under `/tmp/wayoffmars-*`, outside the repository.
+Chrome must be installed; no browser is downloaded by npm install.
+
+The suite uses licensed real Adobe Source Serif TTF, OTF, WOFF and WOFF2 fixtures
+(see `tests/fixtures/fonts/README.md`). Chrome's rendered-glyph inspection verifies
+custom-font glyph use, beyond checking CSS or FontFace load status. Tests cover
+picker imports, simulated file drops, invalid and mixed batches, same-content
+duplicates, refresh/reopened pages, mobile width, file read errors, quota errors,
+transaction aborts, blocked storage, database reads and damaged saved records.
+A simulated drop does not prove physical OS/Finder dragging works.
