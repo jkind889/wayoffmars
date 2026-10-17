@@ -247,3 +247,37 @@ button:disabled { opacity: 0.55; cursor: wait; }
 @media (max-width: 600px) {
   .font-row-heading { flex-wrap: wrap; }
 }
+
+.site-nav { display: flex; gap: 24px; }
+.site-nav a { color: var(--muted); text-decoration: none; padding-block: 20px; font-size: 16px; }
+.site-nav a[aria-current="page"] { color: var(--text); box-shadow: inset 0 -2px var(--accent); }
+.site-nav a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.notes-workspace { margin-top: 40px; }
+.notes-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.notes-toolbar .storage-note { max-width: 600px; }
+.notes-toolbar button { flex-shrink: 0; }
+.note-status { min-height: 24px; line-height: 1.5; color: var(--muted); }
+.note-editor { padding: 28px; margin: 24px 0 48px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.note-editor fieldset { border: 0; padding: 0; margin: 24px 0; display: grid; gap: 22px; min-width: 0; }
+.note-editor .note-field { display: grid; gap: 8px; }
+.note-editor label { display: grid; gap: 8px; font-weight: 600; }
+.note-editor input, .note-editor textarea { width: 100%; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 7px; font: inherit; font-weight: 400; background: var(--background); color: var(--text); line-height: 1.5; }
+.note-editor textarea { resize: vertical; }
+.field-hint { font-size: 14px; color: var(--muted); font-weight: 400; }
+.note-list { list-style: none; padding: 0; margin: 24px 0; }
+.note-card { border-top: 1px solid var(--border); padding-block: 28px; overflow-wrap: anywhere; }
+.note-card-heading { display: flex; align-items: start; justify-content: space-between; gap: 24px; }
+.note-card-heading h3 { margin: 0; font-size: 23px; line-height: 1.4; min-width: 0; }
+.note-card-heading .backup-actions { flex-shrink: 0; }
+.note-body { white-space: pre-wrap; line-height: 1.7; margin: 20px 0; }
+.note-tags { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; }
+.note-tags li { background: #f1f1f3; border-radius: 5px; padding: 5px 9px; font-size: 14px; }
+.note-source { font-size: 14px; line-height: 1.6; color: var(--muted); }
+.notes-footnote { padding-top: 24px; border-top: 1px solid var(--border); }
+@media (max-width: 600px) {
+  .site-nav { gap: 18px; }
+  .notes-toolbar { align-items: start; flex-direction: column; gap: 16px; }
+  .note-editor { padding: 18px; }
+  .note-editor .library-heading { flex-wrap: wrap; gap: 8px; }
+  .note-card-heading { flex-direction: column; gap: 16px; }
+}

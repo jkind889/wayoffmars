@@ -1,0 +1,145 @@
+"use client";
+
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { EMPTY_NOTE, NOTE_LIMITS, NoteConflictError, makeNote, noteFields, noteStorageError, readNotes, validFields, validateNote, validateSource, writeNote, type NoteFields, type SavedNote } from "@/lib/note-storage";
+
+type Draft = { version: 1; id: string; fields: NoteFields; original: SavedNote | null };
+const DRAFT_KEY = "wayoffmars-note-draft-v1";
+const dirtyDraft = (draft: Draft | null) => draft !== null && JSON.stringify(draft.fields) !== JSON.stringify(draft.original ? noteFields(draft.original) : EMPTY_NOTE);
+const sortNotes = (notes: SavedNote[]) => [...notes].sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
+
+export function NoteLibrary() {
+  const [notes, setNotes] = useState<SavedNote[]>([]);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [readError, setReadError] = useState("");
+  const [error, setError] = useState("");
+  const [draftWarning, setDraftWarning] = useState("");
+  const [status, setStatus] = useState("");
+  const [conflict, setConflict] = useState(false);
+  const lock = useRef(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const restoreFocus = useRef(false);
+  const newRef = useRef<HTMLButtonElement>(null);
+  const dirty = dirtyDraft(draft);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function restore() {
+      try {
+        const raw = sessionStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const recovered = JSON.parse(raw) as Draft;
+          if (recovered.version !== 1 || typeof recovered.id !== "string" || !recovered.id || !validFields(recovered.fields)) throw new Error("Invalid draft");
+          if (recovered.original !== null) validateNote(recovered.original);
+          if (!cancelled) { setDraft(recovered); setStatus("Recovered your unfinished note. Review it and save when ready."); }
+        }
+      } catch { if (!cancelled) setDraftWarning("Draft recovery is unavailable. Keep this page open or copy your edits before leaving."); }
+      try {
+        const records = await readNotes();
+        const valid: SavedNote[] = [];
+        let unreadable = 0;
+        for (const record of records) { try { valid.push(validateNote(record)); } catch { unreadable++; } }
+        if (!cancelled) {
+          setNotes(sortNotes(valid));
+          setReadError(unreadable ? `${unreadable} unreadable note(s) could not be displayed. Their stored data has been kept.` : "");
+        }
+      } catch (error) { if (!cancelled) setReadError(`Saved notes could not be read. ${noteStorageError(error)} Reload to retry reading.`); }
+      finally { if (!cancelled) setLoading(false); }
+    }
+    void restore();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!dirty && !busy) return;
+    const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", protect);
+    return () => window.removeEventListener("beforeunload", protect);
+  }, [dirty, busy]);
+  useEffect(() => { if (draft?.id) titleRef.current?.focus(); }, [draft?.id]);
+
+  useEffect(() => {
+    if (restoreFocus.current && !busy) { newRef.current?.focus(); restoreFocus.current = false; }
+  });
+
+  function keepDraft(next: Draft | null) {
+    setDraft(next);
+    try {
+      if (next) sessionStorage.setItem(DRAFT_KEY, JSON.stringify(next));
+      else sessionStorage.removeItem(DRAFT_KEY);
+      setDraftWarning("");
+    } catch { setDraftWarning("Draft recovery is unavailable. Keep this page open or copy your edits before leaving."); }
+  }
+  function canLeaveDraft() { return !dirty || window.confirm("Discard your unsaved edits?"); }
+  function edit(note?: SavedNote) {
+    if (lock.current || !canLeaveDraft()) return;
+    keepDraft({ version: 1, id: note?.id ?? crypto.randomUUID(), original: note ?? null, fields: note ? noteFields(note) : { ...EMPTY_NOTE } });
+    setError(""); setStatus(""); setConflict(false);
+  }
+  function cancel() {
+    if (lock.current || !canLeaveDraft()) return;
+    keepDraft(null); setError(""); setConflict(false); restoreFocus.current = true;
+  }
+  async function save(event: FormEvent, asCopy = false) {
+    event.preventDefault();
+    if (!draft || lock.current) return;
+    if (!draft.fields.title.trim() || !draft.fields.body.trim()) { setError("Add a title and body before saving."); return; }
+    if (!validateSource(draft.fields.source.trim())) { setError("Use a complete http:// or https:// source URL, or leave it empty."); return; }
+    lock.current = true; setBusy(true); setError(""); setStatus("");
+    try {
+      const note = makeNote(draft.fields, asCopy ? crypto.randomUUID() : draft.id, asCopy ? null : draft.original);
+      await writeNote(note, note.id, asCopy ? null : draft.original?.revision ?? null);
+      setNotes(previous => sortNotes([...previous.filter(entry => entry.id !== note.id), note]));
+      keepDraft(null); setConflict(false); setStatus(`“${note.title}” saved in this browser.`); restoreFocus.current = true;
+    } catch (error) { setError(`Note could not be saved. ${noteStorageError(error)}`); setConflict(error instanceof NoteConflictError); }
+    finally { lock.current = false; setBusy(false); }
+  }
+  async function remove(note: SavedNote) {
+    if (lock.current) return;
+    const discards = draft?.id === note.id && dirty;
+    if (!window.confirm(`Delete “${note.title}”?${discards ? " This also discards your unsaved edits to it." : ""} This cannot be undone.`)) return;
+    lock.current = true; setBusy(true); setError(""); setStatus("");
+    try {
+      await writeNote(null, note.id, note.revision);
+      setNotes(previous => previous.filter(entry => entry.id !== note.id));
+      if (draft?.id === note.id) keepDraft(null);
+      setStatus(`“${note.title}” deleted.`); restoreFocus.current = true;
+    } catch (error) { setError(`Note could not be deleted. ${noteStorageError(error)}`); }
+    finally { lock.current = false; setBusy(false); }
+  }
+
+  return <section className="notes-workspace" aria-label="Design notes">
+    <div className="notes-toolbar"><p className="storage-note">Your writing, saved only in this browser. Source links are stored without fetching their contents.</p>
+      <button ref={newRef} type="button" className="primary-button" disabled={loading || busy} onClick={() => edit()}>New note</button></div>
+    {readError && <p className="font-error" role="alert">{readError}</p>}
+    {error && <p className="font-error" role="alert">{error}</p>}
+    {draftWarning && <p className="font-error" role="alert">{draftWarning}</p>}
+    <p className="note-status" role="status">{status}</p>
+    {draft && <form className="note-editor" aria-label="Note editor" onSubmit={save}>
+      <div className="library-heading"><h2>{draft.original ? "Edit note" : "New note"}</h2><span className="storage-note">{dirty ? "Unsaved edits" : "Ready to write"}</span></div>
+      <fieldset disabled={busy}>
+        <label>Title<input ref={titleRef} required maxLength={NOTE_LIMITS.title} value={draft.fields.title} onChange={event => keepDraft({ ...draft, fields: { ...draft.fields, title: event.target.value } })} /></label>
+        <div className="note-field"><label htmlFor="note-body">Body</label><textarea id="note-body" required rows={8} maxLength={NOTE_LIMITS.body} value={draft.fields.body} onChange={event => keepDraft({ ...draft, fields: { ...draft.fields, body: event.target.value } })} /></div>
+        <label>Tags <span className="field-hint">Optional, separated by commas</span><input maxLength={NOTE_LIMITS.tags} value={draft.fields.tags} onChange={event => keepDraft({ ...draft, fields: { ...draft.fields, tags: event.target.value } })} /></label>
+        <label>Source URL <span className="field-hint">Optional</span><input type="url" maxLength={NOTE_LIMITS.source} placeholder="https://" value={draft.fields.source} onChange={event => keepDraft({ ...draft, fields: { ...draft.fields, source: event.target.value } })} /></label>
+        <div className="backup-actions"><button className="primary-button" type="submit">{busy ? "Saving…" : "Save note"}</button>
+          {conflict && <button className="secondary-button" type="button" onClick={event => void save(event, true)}>Save as new note</button>}
+          <button className="secondary-button" type="button" onClick={cancel}>Cancel</button></div>
+      </fieldset>
+      <p className="storage-note">Unfinished edits are recovered on refresh in this tab when browser storage is available. Save to keep a note after closing the tab.</p>
+    </form>}
+    <div className="library-heading"><h2>Saved notes</h2><span className="library-count">{notes.length} {notes.length === 1 ? "note" : "notes"}</span></div>
+    {loading ? <p className="storage-note">Loading your notes…</p> : notes.length === 0 ? <div className="empty-state"><h3>{readError ? "Your notes could not all be loaded" : "Room for your next idea"}</h3><p>{readError ? "Your stored data has been kept. You can still write a new note." : "Write your first note about type, color, layout, or anything that inspires you."}</p></div> :
+      <ul className="note-list">{notes.map(note => <li key={note.id}><article className="note-card" aria-label={note.title}>
+        <div className="note-card-heading"><h3>{note.title}</h3><div className="backup-actions">
+          <button className="secondary-button" disabled={busy} onClick={() => edit(note)} aria-label={`Edit ${note.title}`}>Edit</button>
+          <button className="secondary-button" disabled={busy} onClick={() => void remove(note)} aria-label={`Delete ${note.title}`}>Delete</button></div></div>
+        <p className="note-body">{note.body}</p>
+        {note.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>}
+        {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
+      </article></li>)}</ul>}
+    <p className="storage-note notes-footnote">Notes belong to this browser profile and address. Clearing site data can remove them. Font backups do not include notes. Other tabs see changes after refresh.</p>
+  </section>;
+}

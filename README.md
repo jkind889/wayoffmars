@@ -131,3 +131,27 @@ The existing five high-severity npm audit findings are in the development ESLint
 chain through `braces`. npm's suggested fix changes major lint-configuration
 versions and has not been applied. Check `npm audit --omit=dev` separately for the
 production dependency set.
+
+## Your design notes
+
+Open **Notes** from the header to create, edit and delete your own notes. Title and
+body are required; comma-separated tags and an HTTP(S) source URL are optional.
+URLs are references only: the app does not fetch their contents. Notes render as
+plain text. Limits are 200 characters for titles, 50,000 for bodies, 1,000 for the
+comma-separated tag field and 2,048 for source URLs. Tags deduplicate ignoring case.
+
+Notes use a separate `wayoffmars-notes` IndexedDB database (schema version 1).
+Changes appear as saved or deleted only after their transaction commits. Failed
+saves retain the editor and failed deletes retain the note. Unreadable stored
+records are kept while healthy records load. Revision checks prevent stale tabs
+from overwriting/deleting newer edits; conflicted edits can be saved as a new note.
+
+Unfinished edits are copied to session storage for recovery after refresh in the
+same tab. Replacing or canceling an unsaved draft requires confirmation; leaving
+with edits prompts the browser's navigation warning. If draft recovery storage
+fails, the editor warns you to keep the page open or copy the text. Closing the
+tab may discard an unfinished draft. Save notes before closing it.
+
+Notes have the same browser-profile/origin and eviction limitations as fonts.
+There is no note backup/export or live tab synchronization, and font backups do
+not include notes. Refresh other tabs to see saved changes.
