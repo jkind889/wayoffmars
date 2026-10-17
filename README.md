@@ -155,3 +155,17 @@ tab may discard an unfinished draft. Save notes before closing it.
 Notes have the same browser-profile/origin and eviction limitations as fonts.
 There is no note backup/export or live tab synchronization, and font backups do
 not include notes. Refresh other tabs to see saved changes.
+
+Search notes by typing literal keywords into **Search notes**. Matching ignores
+capitalization and requires every whitespace-separated keyword somewhere in the
+title, body, or tags. It supports partial words and treats punctuation literally;
+there is no query syntax, stemming, semantic matching, or source-URL search.
+An empty/whitespace query shows all notes. Results rank exact full-title matches
+first, then weighted keyword matches (title 10, tag 5, body 1 per keyword using its
+strongest field), with newest edit time and stable note ID breaking ties.
+
+Matching text is highlighted in titles, tags and up to three short body contexts.
+“Read full note” expands the saved body. Search operates on saved notes; changing
+the query keeps unsaved edits in the editor. Saving or deleting updates results
+immediately. The query resets on refresh. Search and snippets run entirely in the
+browser and do not send note text anywhere.

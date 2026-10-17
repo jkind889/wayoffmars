@@ -281,3 +281,19 @@ button:disabled { opacity: 0.55; cursor: wait; }
   .note-editor .library-heading { flex-wrap: wrap; gap: 8px; }
   .note-card-heading { flex-direction: column; gap: 16px; }
 }
+
+.note-search { margin: 24px 0 36px; display: grid; gap: 12px; }
+.note-search label { font-weight: 600; }
+.search-controls { display: flex; gap: 12px; }
+.search-controls input { flex: 1; min-width: 0; width: 100%; padding: 13px; border: 1px solid var(--border); border-radius: 7px; background: var(--background); color: var(--text); }
+.search-controls button { flex-shrink: 0; }
+.note-snippets { line-height: 1.7; }
+.note-snippets p { margin: 16px 0; }
+mark { background: #fff0ae; color: inherit; border-radius: 2px; }
+.note-full-text summary { width: fit-content; padding-block: 8px; color: var(--muted); cursor: pointer; font-size: 14px; }
+.note-full-text summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.empty-state button { margin-top: 24px; }
+@media (max-width: 600px) {
+  .search-controls { flex-wrap: wrap; }
+  .search-controls input { flex-basis: 100%; }
+}

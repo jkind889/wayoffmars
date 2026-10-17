@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { EMPTY_NOTE, NOTE_LIMITS, NoteConflictError, makeNote, noteFields, noteStorageError, readNotes, validFields, validateNote, validateSource, writeNote, type NoteFields, type SavedNote } from "@/lib/note-storage";
+
+import { highlightText, searchNotes, searchTerms } from "@/lib/note-search";
+
+function HighlightedText({ text, terms }: { text: string; terms: string[] }) {
+  return highlightText(text, terms).map((part, index) => part.match ? <mark key={index}>{part.text}</mark> : part.text);
+}
 
 type Draft = { version: 1; id: string; fields: NoteFields; original: SavedNote | null };
 const DRAFT_KEY = "wayoffmars-note-draft-v1";
@@ -9,6 +15,8 @@ const dirtyDraft = (draft: Draft | null) => draft !== null && JSON.stringify(dra
 const sortNotes = (notes: SavedNote[]) => [...notes].sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
 
 export function NoteLibrary() {
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const [notes, setNotes] = useState<SavedNote[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,6 +31,10 @@ export function NoteLibrary() {
   const restoreFocus = useRef(false);
   const newRef = useRef<HTMLButtonElement>(null);
   const dirty = dirtyDraft(draft);
+  const terms = useMemo(() => searchTerms(query), [query]);
+  const results = useMemo(() => searchNotes(notes, query), [notes, query]);
+  const searching = terms.length > 0;
+  function clearSearch() { setQuery(""); searchRef.current?.focus(); }
 
   useEffect(() => {
     let cancelled = false;
@@ -130,14 +142,24 @@ export function NoteLibrary() {
       </fieldset>
       <p className="storage-note">Unfinished edits are recovered on refresh in this tab when browser storage is available. Save to keep a note after closing the tab.</p>
     </form>}
-    <div className="library-heading"><h2>Saved notes</h2><span className="library-count">{notes.length} {notes.length === 1 ? "note" : "notes"}</span></div>
+    <div className="note-search" role="search" aria-label="Search your notes">
+      <label htmlFor="note-search">Search notes</label>
+      <div className="search-controls"><input ref={searchRef} id="note-search" type="search" maxLength={200} value={query} placeholder="Try typography, color, or a phrase" aria-describedby="note-search-help" onChange={event => setQuery(event.target.value)} />
+        {query && <button className="secondary-button" type="button" onClick={clearSearch}>Clear search</button>}</div>
+      <p className="storage-note" id="note-search-help">Search titles, bodies, and tags. Every keyword must match; capitalization does not matter.</p>
+    </div>
+    <div className="library-heading"><h2>{searching ? "Search results" : "Saved notes"}</h2><span className="library-count" aria-live="polite">{searching ? `${results.length} of ${notes.length} notes` : `${notes.length} ${notes.length === 1 ? "note" : "notes"}`}</span></div>
     {loading ? <p className="storage-note">Loading your notes…</p> : notes.length === 0 ? <div className="empty-state"><h3>{readError ? "Your notes could not all be loaded" : "Room for your next idea"}</h3><p>{readError ? "Your stored data has been kept. You can still write a new note." : "Write your first note about type, color, layout, or anything that inspires you."}</p></div> :
-      <ul className="note-list">{notes.map(note => <li key={note.id}><article className="note-card" aria-label={note.title}>
-        <div className="note-card-heading"><h3>{note.title}</h3><div className="backup-actions">
+      results.length === 0 ? <div className="empty-state"><h3>No notes found</h3><p>Try fewer keywords or a different word from your notes.</p><button className="secondary-button" type="button" onClick={clearSearch}>Show all notes</button></div> :
+      <ul className="note-list">{results.map(({ note, snippets }) => <li key={note.id}><article className="note-card" aria-label={note.title}>
+        <div className="note-card-heading"><h3><HighlightedText text={note.title} terms={terms} /></h3><div className="backup-actions">
           <button className="secondary-button" disabled={busy} onClick={() => edit(note)} aria-label={`Edit ${note.title}`}>Edit</button>
           <button className="secondary-button" disabled={busy} onClick={() => void remove(note)} aria-label={`Delete ${note.title}`}>Delete</button></div></div>
-        <p className="note-body">{note.body}</p>
-        {note.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>}
+        {searching ? <>
+          <div className="note-snippets">{snippets.map((snippet, index) => <p key={index}><HighlightedText text={snippet} terms={terms} /></p>)}</div>
+          <details className="note-full-text"><summary>Read full note</summary><p className="note-body"><HighlightedText text={note.body} terms={terms} /></p></details>
+        </> : <p className="note-body">{note.body}</p>}
+        {note.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul>}
         {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
       </article></li>)}</ul>}
     <p className="storage-note notes-footnote">Notes belong to this browser profile and address. Clearing site data can remove them. Font backups do not include notes. Other tabs see changes after refresh.</p>
