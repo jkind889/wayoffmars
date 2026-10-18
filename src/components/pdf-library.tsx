@@ -77,7 +77,7 @@ export function PdfLibrary({ query }: { query: string }) {
       if (added) {
         setPdfs(previous => sortPdfs([...previous.filter(entry => entry.id !== pdf.id), pdf]));
         const empty = pdf.pages.filter(page => !page.text).length;
-        setStatus(`“${pdf.filename}” saved in this browser. ${pdf.pages.length} pages.${empty ? ` ${empty} page(s) have no searchable text; OCR is not supported.` : ""}`);
+        setStatus(`“${pdf.filename}” saved on this Mac. ${pdf.pages.length} pages.${empty ? ` ${empty} page(s) have no searchable text; OCR is not supported.` : ""}`);
       } else setStatus(`This PDF is already saved. Renamed copies are skipped. Refresh to see imports from other tabs.`);
     } catch (error) {
       setStatus(controller.signal.aborted ? "PDF import canceled. Nothing was saved." : "");
@@ -108,7 +108,7 @@ export function PdfLibrary({ query }: { query: string }) {
         const file = event.target.files?.[0]; event.target.value = "";
         if (file) void importPdf(file);
       }} /></div>
-    <p className="storage-note pdf-help">Text-based PDFs, up to 20 MiB and 300 pages each. Only extracted text is saved here; keep your original files. Nothing is uploaded.</p>
+    <p className="storage-note pdf-help">Text-based PDFs, up to 20 MiB and 300 pages each. Only extracted text is saved here; keep your original files. Nothing leaves this Mac.</p>
     {readError && <p className="font-error" role="alert">{readError}</p>}
     {error && <p className="font-error" role="alert">{error}</p>}
     {status && <p className="note-status" role="status">{status}</p>}
@@ -118,7 +118,7 @@ export function PdfLibrary({ query }: { query: string }) {
       <article className="note-card" aria-label={pdf.filename}>
         <div className="note-card-heading"><h3><Highlight text={pdf.filename} terms={terms} /></h3>
           <button type="button" className="secondary-button" disabled={busy} onClick={() => void remove(pdf)} aria-label={`Delete PDF ${pdf.filename}`}>Delete</button></div>
-        <p className="storage-note">{pdf.pages.length} pages · Saved in this browser{pdf.pages.some(page => !page.text) ? ` · ${pdf.pages.filter(page => !page.text).length} page(s) without searchable text` : ""}</p>
+        <p className="storage-note">{pdf.pages.length} pages · Saved on this Mac{pdf.pages.some(page => !page.text) ? ` · ${pdf.pages.filter(page => !page.text).length} page(s) without searchable text` : ""}</p>
         {searching && matches.filter(match => match.pdf.id === pdf.id).map(match => <div className="pdf-page-result" key={match.page}>
           <h4>Page {match.page}</h4>
           <div className="note-snippets">{match.snippets.map((snippet, index) => <p key={index}><Highlight text={snippet} terms={terms} /></p>)}</div>

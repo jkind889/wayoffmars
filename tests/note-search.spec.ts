@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { highlightText, matchingSnippets, searchNotes, searchTerms } from "../src/lib/note-search";
 import type { SavedNote } from "../src/lib/note-storage";
 
@@ -57,7 +57,7 @@ async function create(page: Page, title: string, body: string, tags: string) {
   await page.getByLabel("Body", { exact: true }).fill(body);
   await page.getByLabel("Tags Optional").fill(tags);
   await page.getByRole("button", { name: "Save note", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("saved in this browser");
+  await expect(page.getByRole("status")).toContainText("saved on this Mac");
 }
 
 test("saved notes are found by title, body and tags after refresh with snippets and desktop/mobile states", async ({ page }) => {

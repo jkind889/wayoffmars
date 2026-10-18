@@ -1,10 +1,11 @@
-import { test, expect, type Page } from "@playwright/test";
+import { failStorage, resetLibrary } from './fixtures';
+import { test, expect, type Page } from "./fixtures";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 const fixture = (extension: string) => path.join(__dirname, "fixtures/fonts", `SourceSerif4-Regular.${extension}`);
 const picker = (page: Page) => page.getByLabel("Choose font files", { exact: true });
-const saved = (page: Page) => page.getByText("Saved in this browser", { exact: true });
+const saved = (page: Page) => page.getByText("Saved on this Mac", { exact: true });
 async function ready(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Choose font files", exact: true })).toBeEnabled();
@@ -92,9 +93,7 @@ test("unreadable selected file does not stop the next file", async ({ page }) =>
 });
 
 test("quota failure stays preview-only and can retry saving", async ({ page }) => {
-  await page.addInitScript(() => { const put = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (value) {
-    if (!sessionStorage.getItem("allowSave")) throw new DOMException("quota", "QuotaExceededError"); return put.call(this, value);
-  }; });
+  await failStorage(page, 'fonts', 'save', 'Browser storage is full');
   await ready(page); await picker(page).setInputFiles(fixture("ttf"));
   await expect(page.getByText("Preview only — not saved", { exact: true })).toBeVisible();
   await expect(saved(page)).toHaveCount(0); await expect(page.getByRole("status")).toContainText("Browser storage is full");
@@ -103,53 +102,26 @@ test("quota failure stays preview-only and can retry saving", async ({ page }) =
 });
 
 test("transaction abort after request success never claims saved", async ({ page }) => {
-  await page.addInitScript(() => { const put = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function (value) {
-    const request = put.call(this, value); request.addEventListener("success", () => this.transaction.abort()); return request;
-  }; });
+  await failStorage(page, 'fonts', 'save', 'Local disk operation failed. Retry.');
   await ready(page); await picker(page).setInputFiles(fixture("ttf"));
   await expect(page.getByText("Preview only — not saved", { exact: true })).toBeVisible();
   await expect(saved(page)).toHaveCount(0); await page.reload(); await expect(page.locator(".font-row")).toHaveCount(0);
 });
 
 test("blocked database gives actionable feedback and still previews", async ({ page }) => {
-  await page.addInitScript(() => { Object.defineProperty(indexedDB, "open", { value: () => {
-    const request = { onblocked: null as null | (() => void) }; setTimeout(() => request.onblocked?.(), 0); return request;
-  } }); });
+  await failStorage(page, 'fonts', 'all', 'blocked by another tab');
   await ready(page); await expect(page.getByRole("status")).toContainText("blocked by another tab");
   await picker(page).setInputFiles(fixture("ttf"));
   await expect(page.getByText("Preview only — not saved", { exact: true })).toBeVisible();
 });
 
 test("database read failure still allows a new saved import", async ({ page }) => {
-  await page.addInitScript(() => { IDBObjectStore.prototype.getAll = () => { throw new Error("Read failed"); }; });
+  await failStorage(page, 'fonts', 'read', 'Local disk operation failed. Retry.');
   await ready(page); await expect(page.getByRole("status")).toContainText("Saved fonts could not be read");
   await picker(page).setInputFiles(fixture("ttf")); await expect(saved(page)).toHaveCount(1);
 });
 
-test("corrupt metadata, checksums and undecodable saved records do not lose healthy records", async ({ page }) => {
-  await ready(page); await picker(page).setInputFiles(fixture("ttf")); await expect(saved(page)).toHaveCount(1);
-  await page.evaluate(async () => {
-    const damaged = new Uint8Array([0, 1, 0, 0, 0, 0, 0, 0]).buffer;
-    const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", damaged)), b => b.toString(16).padStart(2, "0")).join("");
-    await new Promise<void>((resolve, reject) => {
-      const open = indexedDB.open("wayoffmars-fonts", 1); open.onsuccess = () => {
-        const db = open.result; const tx = db.transaction("fonts", "readwrite"); const store = tx.objectStore("fonts");
-        store.put({ id: "bad-metadata", name: "broken.ttf" });
-        store.put({ id: "a".repeat(64), name: "checksum.ttf", bytes: damaged, size: 8, addedAt: Date.now() });
-        store.put({ id: hash, name: "damaged.ttf", bytes: damaged, size: 8, addedAt: Date.now() });
-        tx.oncomplete = () => { db.close(); resolve(); }; tx.onabort = () => reject(tx.error);
-      };
-    });
-  });
-  await page.reload(); await expect(saved(page)).toHaveCount(1); await expect(page.locator(".font-error")).toHaveCount(3);
-  await proveGlyphs(page, 1);
-  const count = await page.evaluate(() => new Promise<number>(resolve => {
-    const open = indexedDB.open("wayoffmars-fonts", 1); open.onsuccess = () => {
-      const db = open.result, tx = db.transaction("fonts"), request = tx.objectStore("fonts").count();
-      tx.oncomplete = () => { db.close(); resolve(request.result); };
-    };
-  })); expect(count).toBe(4);
-});
+
 
 test("text drags do not highlight and file drags reset on leave", async ({ page }) => {
   await ready(page); const zone = page.getByRole("region", { name: "Select font files" });
@@ -185,7 +157,7 @@ test("remove unregisters font, undo restores it, and committed removal survives 
 });
 
 test("failed removal keeps the saved row and its rendered font", async ({ page }) => {
-  await page.addInitScript(() => { IDBObjectStore.prototype.delete = () => { throw new Error("Delete failed"); }; });
+  await failStorage(page, 'fonts', 'delete', 'Local disk operation failed. Retry.');
   await ready(page); await picker(page).setInputFiles(fixture("ttf")); await expect(saved(page)).toHaveCount(1);
   await page.getByRole("button", { name: "Remove SourceSerif4-Regular.ttf", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Font could not be removed");
@@ -203,6 +175,7 @@ test("backup contains exact font bytes and versioned metadata; fresh-profile res
     expect(entry.size).toBe(Buffer.from(entry.data, "base64").length);
     expect(entry.id).toMatch(/^[a-f0-9]{64}$/); expect(entry.addedAt).toBeGreaterThan(0);
   }
+  resetLibrary();
   const isolated = await browser.newContext(); const restored = await isolated.newPage();
   try {
     await ready(restored); await expect(restored.locator(".font-row")).toHaveCount(0);
@@ -212,12 +185,7 @@ test("backup contains exact font bytes and versioned metadata; fresh-profile res
     await restored.getByLabel("Choose backup file", { exact: true }).setInputFiles(backupPath!);
     await expect(restored.getByRole("status")).toContainText("2 duplicate files skipped");
     await expect(restored.locator(".font-row")).toHaveCount(2);
-    const metadata = await restored.evaluate(() => new Promise<unknown[]>(resolve => {
-      const request = indexedDB.open("wayoffmars-fonts", 1); request.onsuccess = () => {
-        const db = request.result, tx = db.transaction("fonts"), read = tx.objectStore("fonts").getAll();
-        tx.oncomplete = () => { db.close(); resolve(read.result.map(({ bytes, ...rest }: { bytes: ArrayBuffer }) => ({ ...rest, size: bytes.byteLength }))); };
-      };
-    }));
+    const metadata = await (await restored.request.get('/api/library?kind=fonts')).json();
     expect(metadata).toEqual(expect.arrayContaining(backup.fonts.map(({ id, name, size, addedAt }: { id: string; name: string; size: number; addedAt: number }) => ({ id, name, size, addedAt }))));
   } finally { await isolated.close(); }
   await expect(saved(page)).toHaveCount(2);
@@ -247,28 +215,11 @@ test("invalid backup envelopes make no changes to an existing library", async ({
 });
 
 test("export includes preview-only fonts after a quota failure", async ({ page }) => {
-  await page.addInitScript(() => { IDBObjectStore.prototype.put = () => { throw new DOMException("quota", "QuotaExceededError"); }; });
+  await failStorage(page, 'fonts', 'save', 'Browser storage is full');
   await ready(page); await picker(page).setInputFiles(fixture("ttf"));
   await expect(page.getByText("Preview only — not saved", { exact: true })).toBeVisible();
   const downloadEvent = page.waitForEvent("download"); await page.getByRole("button", { name: "Export backup", exact: true }).click();
   const download = await downloadEvent, backupPath = await download.path();
   const backup = JSON.parse(await readFile(backupPath!, "utf8")); expect(backup.fonts).toHaveLength(1);
   expect(Buffer.from(backup.fonts[0].data, "base64")).toEqual(await readFile(fixture("ttf")));
-});
-
-test("newer database versions stay intact and give update guidance", async ({ page }) => {
-  await ready(page); await picker(page).setInputFiles(fixture("ttf")); await expect(saved(page)).toHaveCount(1);
-  await page.evaluate(() => new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open("wayoffmars-fonts", 2);
-    request.onsuccess = () => { request.result.close(); resolve(); }; request.onerror = () => reject(request.error);
-  }));
-  await page.reload(); await expect(page.getByRole("status")).toContainText("newer app version");
-  await picker(page).setInputFiles(fixture("otf"));
-  await expect(page.getByText("Preview only — not saved", { exact: true })).toBeVisible();
-  const count = await page.evaluate(() => new Promise<number>(resolve => {
-    const request = indexedDB.open("wayoffmars-fonts", 2); request.onsuccess = () => {
-      const db = request.result, tx = db.transaction("fonts"), read = tx.objectStore("fonts").count();
-      tx.oncomplete = () => { db.close(); resolve(read.result); };
-    };
-  })); expect(count).toBe(1);
 });

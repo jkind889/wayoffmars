@@ -247,8 +247,8 @@ export function FontLibrary() {
       <div className="selection-feedback" role="status" aria-atomic="true">
         <p id="selection-note" className="selection-note">
           {isRestoring ? "Loading saved fonts…" : fonts.length > 0
-            ? `${readyCount} ${readyCount === 1 ? "font" : "fonts"} ready to preview.${loadingCount ? ` ${loadingCount} loading.` : ""}${errorCount ? ` ${errorCount} could not be loaded.` : ""} Saved fonts stay in this browser.`
-            : "Fonts are saved locally in this browser. Files are never uploaded."}
+            ? `${readyCount} ${readyCount === 1 ? "font" : "fonts"} ready to preview.${loadingCount ? ` ${loadingCount} loading.` : ""}${errorCount ? ` ${errorCount} could not be loaded.` : ""} Saved fonts stay on this Mac.`
+            : "Fonts are saved on this Mac. Nothing leaves this Mac."}
           {storageMessage ? ` ${storageMessage}` : ""}{importMessage ? ` ${importMessage}` : ""}
         </p>
       </div>
@@ -273,7 +273,7 @@ export function FontLibrary() {
           <input ref={backupInputRef} type="file" accept=".json,application/json" hidden disabled={disabled} aria-label="Choose backup file" onChange={(event) => {
             const file = event.currentTarget.files?.[0]; if (file) void restoreBackup(file); event.currentTarget.value = "";
           }} />
-          <p className="storage-note">Local to this browser and address. Clearing site data, private browsing or browser eviction can erase saved fonts. Keep original files and export backups.</p>
+          <p className="storage-note">Saved on this Mac. Use Local library to import older browser data and back up the complete library.</p>
         </div>
         {fonts.length === 0 ? (
           <div className="empty-state"><h3>Your collection starts here.</h3><p>Choose a font file to get started.</p></div>
@@ -288,7 +288,7 @@ export function FontLibrary() {
                 </div>
                 {font.status === "ready" ? (
                   <>
-                    <p className="font-save-status">{font.saved ? "Saved in this browser" : "Preview only — not saved"}</p>
+                    <p className="font-save-status">{font.saved ? "Saved on this Mac" : "Preview only — not saved"}</p>
                     {!font.saved ? <button type="button" className="secondary-button" disabled={disabled} onClick={() => void retrySave(font.id)}>Retry saving</button> : null}
                     <p className="font-sample" style={{ fontFamily: `"${font.family}"`, fontSize: `${previewSize}px` }}>{previewText || " "}</p>
                   </>

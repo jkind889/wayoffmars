@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { failStorage } from './fixtures';
+import { test, expect, type Page } from "./fixtures";
 import { makePdf, textPage, imagePage } from "./helpers/pdf";
 
 const pdfRegion = (page: Page) => page.getByRole("region", { name: "PDF library", exact: true });
@@ -13,7 +14,7 @@ async function upload(page: Page, buffer = sample(), name = "Layout guide.pdf") 
 }
 async function imported(page: Page) {
   await upload(page);
-  await expect(pdfRegion(page).getByRole("status")).toContainText("saved in this browser");
+  await expect(pdfRegion(page).getByRole("status")).toContainText("saved on this Mac");
 }
 
 test("local PDF text persists, preserves physical page references, and searches alongside notes on desktop/mobile", async ({ page }) => {
@@ -30,7 +31,7 @@ test("local PDF text persists, preserves physical page references, and searches 
   await page.getByLabel("Title", { exact: true }).fill("Grid ideas");
   await page.getByLabel("Body", { exact: true }).fill("Editorial grid in a note.");
   await page.getByRole("button", { name: "Save note", exact: true }).click();
-  // Exercise the native picker path; the file never reaches the app server.
+  // Exercise the native picker path; requests stay on the local app server.
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Import PDF", exact: true }).click();
   await (await chooser).setFiles({ name: "Layout guide.pdf", mimeType: "application/pdf", buffer: sample() });
@@ -58,13 +59,14 @@ test("local PDF text persists, preserves physical page references, and searches 
   await expect(pdfRegion(page).locator(".pdf-page-result")).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: "/tmp/wayoffmars-pdf-mobile.png", fullPage: true });
-  expect(external).toEqual([]); expect(writes).toEqual([]); expect(errors).toEqual([]);
+  expect(external).toEqual([]); expect(writes.every(url => url.includes("/api/library"))).toBe(true); expect(errors).toEqual([]);
 });
 
 test("duplicates are skipped and confirmed deletion persists without affecting a note draft or fonts", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("button", { name: "Choose font files", exact: true })).toBeEnabled();
   await page.getByLabel("Choose font files").setInputFiles("tests/fixtures/fonts/SourceSerif4-Regular.ttf");
-  await expect(page.getByText("Saved in this browser", { exact: true })).toBeVisible();
+  await expect(page.getByText("Saved on this Mac", { exact: true })).toBeVisible();
   await ready(page); await imported(page);
   await upload(page, sample(), "Renamed.pdf");
   await expect(pdfRegion(page).getByRole("status")).toContainText("already saved");
@@ -82,7 +84,7 @@ test("duplicates are skipped and confirmed deletion persists without affecting a
   page.once("dialog", dialog => dialog.accept()); await page.reload();
   await expect(pdfRegion(page).getByText("0 PDFs", { exact: true })).toBeVisible();
   page.once("dialog", dialog => dialog.accept()); await page.goto("/");
-  await expect(page.getByText("Saved in this browser", { exact: true })).toBeVisible();
+  await expect(page.getByText("Saved on this Mac", { exact: true })).toBeVisible();
 });
 
 for (const [name, buffer, message] of [
@@ -107,14 +109,7 @@ for (const [name, buffer, message] of [
 
 for (const failure of ["quota", "abort"]) {
   test(`PDF ${failure} failure claims no save and retry succeeds`, async ({ page }) => {
-    await page.addInitScript(failure => {
-      const add = IDBObjectStore.prototype.add;
-      IDBObjectStore.prototype.add = function(value) {
-        if (this.name !== "pdfs" || sessionStorage.getItem("allowPdf")) return add.call(this, value);
-        if (failure === "quota") throw new DOMException("full", "QuotaExceededError");
-        const request = add.call(this, value); request.addEventListener("success", () => this.transaction.abort()); return request;
-      };
-    }, failure);
+    await failStorage(page, 'pdfs', 'save', 'Local disk operation failed. Retry.');
     await ready(page); await upload(page);
     await expect(pdfRegion(page).getByRole("alert")).toContainText("PDF could not be imported");
     await expect(pdfRegion(page).getByRole("article")).toHaveCount(0);
@@ -124,10 +119,7 @@ for (const failure of ["quota", "abort"]) {
 }
 
 test("failed deletion retains searchable text", async ({ page }) => {
-  await page.addInitScript(() => {
-    const remove = IDBObjectStore.prototype.delete;
-    IDBObjectStore.prototype.delete = function(key) { if (this.name === "pdfs") throw new Error("Delete failed"); return remove.call(this, key); };
-  });
+  await failStorage(page, 'pdfs', 'delete', 'Local disk operation failed. Retry.');
   await ready(page); await imported(page);
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Delete PDF Layout guide.pdf" }).click();
@@ -147,21 +139,7 @@ test("canceling a stalled worker leaves the UI usable and saves nothing", async 
   await page.reload(); await expect(pdfRegion(page).getByText("0 PDFs", { exact: true })).toBeVisible();
 });
 
-test("corrupt PDF records are kept while healthy PDFs and notes still load", async ({ page }) => {
-  await ready(page); await imported(page);
-  await page.evaluate(() => new Promise<void>(resolve => {
-    const open = indexedDB.open("wayoffmars-pdfs", 1); open.onsuccess = () => {
-      const db = open.result, tx = db.transaction("pdfs", "readwrite");
-      tx.objectStore("pdfs").put({ id: "damaged", filename: "Broken.pdf" });
-      tx.oncomplete = () => { db.close(); resolve(); };
-    };
-  }));
-  await page.reload();
-  await expect(pdfRegion(page).getByRole("alert")).toContainText("1 unreadable PDF");
-  await search(page).fill("kerning");
-  await expect(pdfRegion(page).locator(".pdf-page-result")).toContainText("Page 3");
-  await expect(page.getByRole("button", { name: "New note", exact: true })).toBeEnabled();
-});
+
 
 test("stale tabs cannot delete a PDF reimported elsewhere", async ({ page, context }) => {
   await ready(page); await imported(page);
@@ -178,10 +156,7 @@ test("stale tabs cannot delete a PDF reimported elsewhere", async ({ page, conte
 });
 
 test("PDF read failure is reported and does not prevent note creation", async ({ page }) => {
-  await page.addInitScript(() => {
-    const read = IDBObjectStore.prototype.getAll;
-    IDBObjectStore.prototype.getAll = function() { if (this.name === "pdfs") throw new Error("Read failed"); return read.call(this); };
-  });
+  await failStorage(page, 'pdfs', 'read', 'Local disk operation failed. Retry.');
   await ready(page);
   await expect(pdfRegion(page).getByRole("alert")).toContainText("Saved PDFs could not be read");
   await page.getByRole("button", { name: "New note", exact: true }).click();

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { searchPdfs, PDF_RESULT_LIMIT } from "../src/lib/pdf-search";
 import { validatePdf, type SavedPdf } from "../src/lib/pdf-model";
 

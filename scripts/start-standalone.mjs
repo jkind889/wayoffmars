@@ -13,5 +13,5 @@ try {
 } catch (error) {
   if (error.code !== "ENOENT") throw error;
 }
-process.env.HOSTNAME ||= "127.0.0.1";
+process.env.HOSTNAME = "127.0.0.1";
 await import(projectFile(".next/standalone/server.js").href);

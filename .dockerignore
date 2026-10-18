@@ -16,3 +16,10 @@ tests
 playwright.config.ts
 out
 build
+
+# Local runtime libraries and backups
+.wayoffmars-data/
+data/
+backups/
+*.sqlite*
+*.pending-*

@@ -3,28 +3,34 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "node scripts/start-standalone.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
     "predev": "node scripts/prepare-pdfjs.mjs",
-    "prebuild": "node scripts/prepare-pdfjs.mjs"
+    "prebuild": "node scripts/prepare-pdfjs.mjs",
+    "backup": "node scripts/library-backup.mjs backup",
+    "restore": "node scripts/library-backup.mjs restore"
   },
   "dependencies": {
     "next": "16.4.1",
     "pdfjs-dist": "6.4.299",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
-    "@types/node": "^20",
+    "@types/node": "^22.20.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.1",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22.16.0 <23"
   }
 }

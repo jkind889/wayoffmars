@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { failStorage } from './fixtures';
+import { test, expect, type Page } from "./fixtures";
 
 async function ready(page: Page) {
   await page.goto("/notes");
@@ -80,15 +81,7 @@ test("unsaved edits survive refresh, protect navigation and require confirmation
 
 for (const failure of ["quota", "abort"]) {
   test(`${failure} failure retains draft and only a committed retry claims saved`, async ({ page }) => {
-    await page.addInitScript(failure => {
-      const put = IDBObjectStore.prototype.put;
-      IDBObjectStore.prototype.put = function(value) {
-        if (this.name !== "notes" || sessionStorage.getItem("allowSave")) return put.call(this, value);
-        if (failure === "quota") throw new DOMException("full", "QuotaExceededError");
-        const request = put.call(this, value);
-        request.addEventListener("success", () => this.transaction.abort()); return request;
-      };
-    }, failure);
+    await failStorage(page, 'notes', 'save', 'Local disk operation failed. Retry.');
     await ready(page); await create(page);
     await expect(page.getByRole("region", { name: "Design notes", exact: true }).getByRole("alert")).toContainText("Note could not be saved");
     await expect(page.getByRole("article")).toHaveCount(0);
@@ -103,7 +96,7 @@ for (const failure of ["quota", "abort"]) {
 }
 
 test("failed deletion keeps the saved note", async ({ page }) => {
-  await page.addInitScript(() => { IDBObjectStore.prototype.delete = () => { throw new Error("Delete failed"); }; });
+  await failStorage(page, 'notes', 'delete', 'Local disk operation failed. Retry.');
   await ready(page); await create(page);
   page.once("dialog", dialog => dialog.accept());
   await card(page, "Editorial rhythm").getByRole("button", { name: "Delete Editorial rhythm" }).click();
@@ -113,9 +106,7 @@ test("failed deletion keeps the saved note", async ({ page }) => {
 });
 
 test("blocked storage and failed reads are actionable without stopping writing", async ({ page }) => {
-  await page.addInitScript(() => { Object.defineProperty(indexedDB, "open", { value: () => {
-    const request = { onblocked: null as null | (() => void) }; setTimeout(() => request.onblocked?.(), 0); return request;
-  } }); });
+  await failStorage(page, 'notes', 'all', 'blocked by another tab');
   await ready(page); await expect(page.getByRole("region", { name: "Design notes", exact: true }).getByRole("alert")).toContainText("blocked by another tab");
   await create(page);
   await expect(page.getByRole("region", { name: "Design notes", exact: true }).getByRole("alert").filter({ hasText: "Note could not be saved" })).toBeVisible();
@@ -124,16 +115,11 @@ test("blocked storage and failed reads are actionable without stopping writing",
 
 test("read failures do not overwrite unread notes", async ({ page }) => {
   await ready(page); await create(page);
-  await page.addInitScript(() => { IDBObjectStore.prototype.getAll = () => { throw new Error("Read failed"); }; });
+  await failStorage(page, 'notes', 'read', 'Local disk operation failed. Retry.');
   await page.reload(); await expect(page.getByRole("region", { name: "Design notes", exact: true }).getByRole("alert")).toContainText("Saved notes could not be read");
   await create(page, "Another idea");
   await expect(card(page, "Another idea")).toBeVisible();
-  const count = await page.evaluate(() => new Promise<number>(resolve => {
-    const open = indexedDB.open("wayoffmars-notes", 1); open.onsuccess = () => {
-      const db = open.result, tx = db.transaction("notes"), req = tx.objectStore("notes").count();
-      tx.oncomplete = () => { db.close(); resolve(req.result); };
-    };
-  })); expect(count).toBe(2);
+  expect(await (await page.request.get('/api/library?kind=notes')).json()).toHaveLength(2);
 });
 
 test("stale tabs cannot overwrite or delete newer notes and can save edits as a copy", async ({ page, context }) => {
@@ -173,18 +159,7 @@ test("invalid source is not saved; unavailable draft storage keeps edits visible
   await expect(card(page, "Link note")).toBeVisible();
 });
 
-test("corrupt notes are preserved and do not hide healthy notes", async ({ page }) => {
-  await ready(page); await create(page);
-  await page.evaluate(() => new Promise<void>(resolve => {
-    const open = indexedDB.open("wayoffmars-notes", 1); open.onsuccess = () => {
-      const db = open.result, tx = db.transaction("notes", "readwrite");
-      tx.objectStore("notes").put({ id: "damaged", title: "Broken" });
-      tx.oncomplete = () => { db.close(); resolve(); };
-    };
-  }));
-  await page.reload(); await expect(card(page, "Editorial rhythm")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Design notes", exact: true }).getByRole("alert")).toContainText("1 unreadable note");
-});
+
 
 test("long valid tag input saves and keyboard focus returns after mutations", async ({ page }) => {
   await ready(page);

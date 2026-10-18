@@ -1,225 +1,193 @@
 # wayoffmars
 
-A personal font library built with Next.js, React and TypeScript. Choose or drop
-TTF, OTF, WOFF and WOFF2 files (up to 20 MiB each) to preview them in the browser.
+A local Mac library for fonts, design notes and searchable PDF text. No accounts,
+remote uploads, hosted database, synchronization or deployment.
 
-## Daily development
+## Run locally
 
-Use Node.js 22.13 or newer in the Node 22 release line and npm:
+Use **Node 22.16 or newer in the Node 22 release line** and npm. SQLite uses
+Node's built-in `node:sqlite` (experimental in this runtime; no native addon).
+Implementation follows the [Node 22.16 SQLite documentation](https://nodejs.org/download/release/v22.16.0/docs/api/sqlite.html).
 
-```bash
+```sh
 npm ci
 npm run dev
+# production:
+npm run build
+npm start
 ```
 
-Open http://localhost:3000. Next.js reports a different port if 3000 is occupied.
-Source edits refresh the page automatically. Use native development for daily
-work; a production build is available with `npm run build` then `npm start`.
+Open http://localhost:3000 or http://127.0.0.1:3000. Native scripts bind to
+127.0.0.1; production forces loopback. The API validates loopback Host and exact
+Origin, rejects cross-site requests, and requires a custom header and JSON for
+mutations. Do not expose it through a proxy, tunnel, LAN binding or port forward.
+There is no authentication against other processes/users on this Mac.
 
-## Docker: run the production app
+## Local storage and existing browser libraries
 
-Start Docker Desktop first. An **image** is the built application package; a
-**container** is a running instance of it. The Dockerfile installs the lockfile
-with `npm ci`, builds Next.js standalone output, then copies only runtime files
-and static/public assets into the final stage. It runs as the non-root `node` user.
+By default the library lives at:
 
-From this project folder:
+```text
+~/Library/Application Support/wayoffmars/
+  library.sqlite       # records, PDF page text, file metadata, import receipts
+  library.sqlite-wal   # SQLite journal while in use; never copy just the main DB
+  library.sqlite-shm
+  assets/<sha256>      # immutable binary files; filenames never become paths
+```
 
-```bash
+Override with an absolute `WAYOFFMARS_DATA_DIR` when starting the app and backup
+commands. Development and production share this default, independent of working
+directory. Runtime data is outside the checkout by default. `.gitignore` and
+`.dockerignore` also exclude `data/`, `.wayoffmars-data/`, `backups/`, SQLite files
+and incomplete backup folders. Keep any custom data directory outside the repo.
+
+**Nothing automatically migrates your IndexedDB library.** Open **Local library**
+in the same browser profile and exact address (hostname and port) you previously
+used, then select **Import browser library**. This explicitly reads the old
+`wayoffmars-notes`, `wayoffmars-pdfs` and `wayoffmars-fonts` version-1 stores and
+copies validated records and font bytes to local storage. Your IndexedDB records
+are never edited or deleted. Each result appears in the import report.
+
+- Imports commit one record at a time and verify readback and binary checksums.
+  Stop or interruption leaves completed records intact; rerun to continue.
+- Receipts make repeat imports idempotent, including a lost network response.
+  A previously imported record stays skipped if subsequently edited or deleted in
+  SQLite. This is a one-way import, not a sync or restore mechanism.
+- Same identity with different metadata/content is a **conflict**, skipped without
+  changing either copy. Keep the SQLite version, or manually copy a conflicting
+  browser note as a new note. The old browser data remains available for recovery.
+- Invalid or unreadable records are reported and retained in IndexedDB; healthy
+  records can continue. A newer browser schema is not opened or downgraded.
+- Legacy PDF records contain text only, with no original bytes. They remain fully
+  searchable. In this slice new PDFs also retain only extracted text.
+
+All browser profiles/ports served by the same local data directory now see the
+same library. Refresh other tabs to see changes. Notes use transactional revision
+checks; stale edits/deletes fail and the draft can be saved as a new note. Drafts
+still use tab session storage, with navigation warnings and refresh recovery.
+
+Assets are atomically written, fsynced and checksum verified before the record
+transaction commits. Interrupted writes can leave unreferenced assets; deletion
+removes the library record but retains bytes on disk to avoid racing backups.
+Backups copy only referenced assets. To reclaim old assets, restore a verified
+backup into a new directory and switch to it after stopping the app. Keep the old
+folder until the restored library is checked. This is not secure erasure.
+
+## Full-library backup and restore
+
+A plain copy of a live SQLite file is unsafe. Use the database-aware command:
+
+```sh
+npm run backup -- /absolute/path/to/new-backup
+# With a custom library:
+WAYOFFMARS_DATA_DIR=/absolute/path/to/library npm run backup -- /absolute/path/to/new-backup
+```
+
+The app may remain open: the SQLite backup API takes a consistent snapshot, then
+copies and SHA-256-verifies every asset referenced by that snapshot. Immutable
+assets remain available during concurrent edits/deletes. An integrity check and
+manifest cover the database and assets. A completed folder is published only
+when verification succeeds. Failed `.pending-*` folders are incomplete and can
+be removed after checking the error. Store completed backups independently of
+the Mac; backups contain unencrypted personal content and font files.
+
+Restore **after stopping the app**, always into a new directory:
+
+```sh
+npm run restore -- /absolute/path/to/backup /absolute/path/to/new-library
+WAYOFFMARS_DATA_DIR=/absolute/path/to/new-library npm start
+```
+
+Restore verifies the manifest, database checksum/integrity/version, and all
+referenced asset checksums, including import receipts. It never overwrites an
+existing destination. Check the restored library before removing the old folder.
+Remember to use the chosen data path on subsequent starts. No broad merging or
+synchronization is performed.
+
+The Fonts page's existing JSON export/import remains a **fonts-only** portable
+backup (including preview-only fonts), with 500-font/100-MiB envelope limits.
+Use the full-library command for notes and PDF text as well.
+
+## Docker
+
+The existing standalone Docker configuration remains supported with persistent
+storage. Docker listens on all interfaces *inside* the container; publish only
+to Mac loopback. A named volume survives container removal and image rebuilds:
+
+```sh
 docker build -t wayoffmars:local .
-docker run --rm -d --name wayoffmars -p 127.0.0.1:3001:3000 wayoffmars:local
+docker run --rm -d --name wayoffmars \
+  -p 127.0.0.1:3001:3000 \
+  -v wayoffmars-data:/data wayoffmars:local
 ```
 
-Open http://localhost:3001. In `127.0.0.1:3001:3000`, the app listens on port
-**3000 inside** the container and Docker makes it available at **3001 on your
-computer**. The `127.0.0.1` binding keeps it local. `EXPOSE 3000` documents the
-internal port; `-p` publishes it. If 3001 is busy, use another host port such as
-`127.0.0.1:3002:3000` and open localhost:3002.
+Open http://localhost:3001. The image uses `WAYOFFMARS_DATA_DIR=/data` and runs as
+non-root `node`; the named volume is initialized with that directory's ownership.
+Never omit the named mount (an anonymous volume is hard to recover) or remove the
+named volume unless discarding its library is intended. Native and Docker data
+are separate. No runtime content is baked into the image.
 
-```bash
-docker ps                         # running containers and health
-docker logs wayoffmars             # server output
-docker stop wayoffmars             # stop; --rm also removes this container
-```
+For a Docker backup, stop the container first, copy the volume to an empty staging
+folder using a temporary container, then run the same database-aware backup tool
+against that staging folder on the Mac. For example:
 
-A container uses the source captured at build time. After edits, rebuild the
-image and create a new container; restarting the old one keeps its old code:
-
-```bash
-docker build -t wayoffmars:local .
+```sh
 docker stop wayoffmars
-docker run --rm -d --name wayoffmars -p 127.0.0.1:3001:3000 wayoffmars:local
+mkdir /tmp/wayoffmars-volume-copy
+docker run --rm -v wayoffmars-data:/data:ro \
+  -v /tmp/wayoffmars-volume-copy:/copy node:22-bookworm-slim \
+  sh -c 'cp -a /data/. /copy/'
+WAYOFFMARS_DATA_DIR=/tmp/wayoffmars-volume-copy npm run backup -- /absolute/path/to/new-backup
 ```
 
-Skip the stop command if it is already stopped. For daily editing, use
-`npm run dev` on your computer for automatic refresh; Docker here packages a
-production build. No font-data volume is required because fonts live in the
-browser. Changing the host port changes the library’s origin; use a backup to
-transfer fonts from localhost:3000 to localhost:3001.
+To restore into Docker: stop the app, run the restore command into a new Mac
+folder, then copy that verified folder into a **new** named Docker volume and
+chown its contents to `node:node` (UID/GID 1000). Run the image with that new volume
+mounted at `/data`. Keep the old volume until verification. Do not copy a live DB
+or overwrite an in-use volume. Docker runtime checks require Docker Desktop.
 
-See Docker’s [multi-stage build guide](https://docs.docker.com/build/building/multi-stage/)
-and [port publishing guide](https://docs.docker.com/get-started/docker-concepts/running-containers/publishing-ports/).
+## Fonts, notes and PDF search
 
-## Your font library
+Fonts accept TTF, OTF, WOFF and WOFF2 up to 20 MiB. SHA-256 deduplicates renamed
+copies; the browser decodes before normal imports. Preview text/size are transient.
+Failed saves remain preview-only with Retry saving; remove/undo persists locally.
 
-- Font bytes, filenames, sizes and import dates are saved in IndexedDB (schema
-  version 1). A SHA-256 content hash is the stable identity. Renamed copies are
-  skipped; different font bytes/formats remain separate entries.
-- “Saved in this browser” appears only after the storage transaction completes.
-  Storage failures leave a usable preview with “Retry saving”. One bad file or
-  saved record does not prevent healthy fonts from loading. Damaged saved records
-  are kept; dismissing an error only hides its row for this page session.
-- Change preview text or size for the current page. These controls reset on a new
-  page or refresh and are not part of backups.
-- Remove deletes a saved font after the deletion commits and unregisters its
-  preview. “Undo removal” restores the most recently removed font until the next
-  removal or refresh. Keep a backup before larger changes.
-- Export backup downloads a JSON file containing a version 1 manifest plus the
-  complete font bytes as base64. The manifest records `format`, `version`, export
-  time and each font’s hash, filename, byte size and import date. Backups are
-  unencrypted and contain the fonts themselves; observe the fonts’ licenses.
-- Import backup merges into the current library. It validates the envelope,
-  metadata, byte sizes, SHA-256 hashes, signatures and browser decoding. Duplicates
-  are skipped; invalid entries get individual errors while valid entries restore.
-  Backups support up to 500 fonts and 100 MiB per file (base64 adds about one third
-  to the original size). Export includes preview-only fonts. Unreadable saved
-  records are explicitly reported as omitted and kept in storage. If storage
-  cannot be read, export can back up currently loaded fonts with a partial-backup
-  warning.
+Notes require a title/body, with optional comma-separated tags and HTTP(S) source.
+Limits: title 200, body 50,000, tags 1,000 and source 2,048 characters. Tags
+deduplicate ignoring case; source links are not fetched. Content renders as text.
 
-Files are never uploaded. Storage belongs to one **browser profile and origin**:
-protocol, hostname and port all matter. `localhost:3000`, `127.0.0.1:3000` and
-`localhost:3001` have separate libraries. Switching profiles or opening another
-address does not carry your fonts over; export/import a backup to transfer them.
-Other open tabs see changes after refresh, without live synchronization.
+PDFs accept text-based documents up to **20 MiB / 300 pages / 100,000 characters
+per page / 2 million per document**. PDF.js runs in a dedicated browser worker,
+with progress, cancellation and a 60-second timeout. Worker, CMaps and standard
+fonts come from the app's pinned dependency (`predev`/`prebuild` prepare them),
+never a CDN. Scanned/image-only, encrypted and XFA documents are rejected. Mixed
+text/image PDFs keep physical page offsets. Extraction order and font mappings
+may affect search; there is no OCR.
 
-Browser storage is not a permanent archive. Clearing site data, private browsing,
-profile deletion, browser eviction, disk failures or quota limits can erase or
-prevent saving fonts. Keep the original files and independent backups. Docker
-will serve the app; it does not store or back up your browser’s font data.
-
-Files are checked for extension, size and signature, then decoded with FontFace.
-Filenames label previews; internal font naming metadata is not extracted. Unsupported
-characters can still fall back to another font; the tests verify actual custom
-Latin glyph rendering with the included fixtures.
+Combined search remains browser-side over saved records. All literal keywords
+must match within a note's title/body/tags or one PDF page plus its filename.
+Physical page numbers include blanks and ignore printed/roman labels. Notes rank
+title matches above tags/body; PDFs rank filename matches above text, with recency
+and stable IDs as tie breakers. Snippets are highlighted; PDF results cap at 100
+matching pages with total count. Search preserves note drafts.
 
 ## Checks
 
-```bash
+```sh
 npm run lint
 npm run typecheck
 npm run build
 npm test
 ```
 
-`npm test` uses installed Google Chrome through Playwright, with fresh isolated
-contexts. It reuses a running localhost:3000 dev server or starts one. It never
-clears your normal Chrome profile or saved fonts. Set
-`TEST_BASE_URL=http://localhost:3001 npm test` to test another running instance.
-No browser is downloaded by `npm ci`. Screenshots/results go under
-`/tmp/wayoffmars-*`, outside the repository.
+Tests use installed Mac Google Chrome through Playwright and a new temporary
+SQLite/asset directory under `/tmp/wayoffmars-test-*`, served on 127.0.0.1:3107.
+They refuse `TEST_BASE_URL` and never reuse a user's running app. Browser contexts
+are isolated, with synthetic PDF and licensed Source Serif font fixtures. Existing
+browser libraries are never imported by these tests. Screenshots/results stay in
+`/tmp/wayoffmars-*`. Tests cover glyph rendering, drafts/conflicts, search, limits,
+failures/retries, explicit migration, lost responses, security checks, fresh-process
+persistence, and backup/restore. Simulated drops do not prove Finder dragging.
 
-The tests use licensed real Adobe Source Serif TTF, OTF, WOFF and WOFF2 fixtures
-(see `tests/fixtures/fonts/README.md`). Chrome's rendered-glyph inspection checks
-custom font use beyond CSS or FontFace load status. Coverage includes picker and
-simulated drop imports, invalid/mixed batches, duplicates, persistence, mobile
-width, file/database read failures, quota, transaction aborts, blocked storage,
-damaged saved records, controls, removal/undo and backup restoration. Simulated
-drops do not prove physical OS/Finder dragging works.
-
-The existing five high-severity npm audit findings are in the development ESLint
-chain through `braces`. npm's suggested fix changes major lint-configuration
-versions and has not been applied. Check `npm audit --omit=dev` separately for the
-production dependency set.
-
-## Your design notes
-
-Open **Notes** from the header to create, edit and delete your own notes. Title and
-body are required; comma-separated tags and an HTTP(S) source URL are optional.
-URLs are references only: the app does not fetch their contents. Notes render as
-plain text. Limits are 200 characters for titles, 50,000 for bodies, 1,000 for the
-comma-separated tag field and 2,048 for source URLs. Tags deduplicate ignoring case.
-
-Notes use a separate `wayoffmars-notes` IndexedDB database (schema version 1).
-Changes appear as saved or deleted only after their transaction commits. Failed
-saves retain the editor and failed deletes retain the note. Unreadable stored
-records are kept while healthy records load. Revision checks prevent stale tabs
-from overwriting/deleting newer edits; conflicted edits can be saved as a new note.
-
-Unfinished edits are copied to session storage for recovery after refresh in the
-same tab. Replacing or canceling an unsaved draft requires confirmation; leaving
-with edits prompts the browser's navigation warning. If draft recovery storage
-fails, the editor warns you to keep the page open or copy the text. Closing the
-tab may discard an unfinished draft. Save notes before closing it.
-
-Notes have the same browser-profile/origin and eviction limitations as fonts.
-There is no note backup/export or live tab synchronization, and font backups do
-not include notes. Refresh other tabs to see saved changes.
-
-Search notes by typing literal keywords into **Search notes and PDFs**. Matching ignores
-capitalization and requires every whitespace-separated keyword somewhere in the
-title, body, or tags. It supports partial words and treats punctuation literally;
-there is no query syntax, stemming, semantic matching, or source-URL search.
-An empty/whitespace query shows all notes. Results rank exact full-title matches
-first, then weighted keyword matches (title 10, tag 5, body 1 per keyword using its
-strongest field), with newest edit time and stable note ID breaking ties.
-
-Matching text is highlighted in titles, tags and up to three short body contexts.
-“Read full note” expands the saved body. Search operates on saved notes; changing
-the query keeps unsaved edits in the editor. Saving or deleting updates results
-immediately. The query resets on refresh. Search and snippets run entirely in the
-browser and do not send note text anywhere.
-
-
-## Local PDF search
-
-On **Notes**, use **Import PDF** in the PDF section. Import one text-based PDF at
-a time, up to **20 MiB**, **300 pages**, **100,000 extracted characters per page**
-and **2 million characters per document**. Parsing runs in a dedicated PDF.js
-worker, with page progress, cancellation and a 60-second timeout. The worker,
-CMaps and standard fonts are served from this app, never a CDN. Nothing is uploaded.
-`predev` and `prebuild` generate these versioned resources under `public/pdfjs/`
-from the pinned dependency; generated files are ignored by Git and ESLint.
-
-Only the filename, byte size, content hash, import date and extracted page text
-are persisted in the separate `wayoffmars-pdfs` IndexedDB database (schema v1).
-Original PDF bytes are not retained. Keep your source files: there is no PDF
-viewer, download or backup/export in this slice. Identical bytes, even under a
-new filename, are skipped atomically. Different PDFs with the same filename can
-coexist. Import success and deletion are shown only after storage commits.
-Deletion uses the same confirmation pattern as notes and prevents stale tabs
-from deleting a document that another tab has deleted and reimported.
-
-The shared search shows note results and PDF results in separate groups. PDF
-matches require every literal keyword in the filename or **the same page's text**;
-terms on different pages do not combine into a match. Page references are the
-one-based physical position in the PDF, including blank/image-only pages, rather
-than printed page labels such as roman numerals. Each matching page shows its
-filename, page number and highlighted text contexts. Filename-only matches show
-page context. Empty queries list imported PDFs. PDF matches rank filename hits
-above page-text hits, then by newest import, stable content identity and page.
-Search yields between page batches and displays at most 100 matching pages with
-the full match count; narrow the query to see other matches.
-
-Scanned/image-only PDFs, password-protected PDFs and XFA forms are rejected with
-an explanation. A PDF containing both text and image-only pages imports with a
-persistent count of pages without searchable text. Malformed or unsupported
-content, limits, storage failure and quota errors do not save a partial import.
-Extraction follows the PDF's text runs; complex reading order, missing character
-mappings, ligatures and line-end hyphenation can affect search. There is no OCR,
-semantic/AI search, account, sync or remote storage. Other tabs see changes after
-refresh. Clearing browser site data can remove the collection; font backups do
-not include PDF text or notes.
-
-`pdf-model.ts` defines storage-independent records; `pdf-extraction.ts` parses
-local input, `pdf-search.ts` produces page matches, and `pdf-storage.ts` is the
-IndexedDB adapter. A future storage backend can replace the adapter without
-combining extraction/search with persistence.
-
-The PDF tests use generated, valid PDF fixtures through the real parser in the
-Mac's installed Google Chrome. They cover mixed text/image pages, physical page
-references despite roman page labels, adjacent text runs, reload persistence,
-combined note/PDF search, duplicates, confirmed deletion, stale tabs, cancellation,
-timeout, malformed/unsupported inputs, limits, corrupted records and storage
-failures. Existing notes and font suites remain regression coverage. Tests use
-isolated browser contexts and do not touch the user's saved libraries.
+The previously reported five high-severity audit findings are in the development
+ESLint chain. No broad lint/dependency upgrade is included in this work.

@@ -106,7 +106,7 @@ export function NoteLibrary() {
       const note = makeNote(draft.fields, asCopy ? crypto.randomUUID() : draft.id, asCopy ? null : draft.original);
       await writeNote(note, note.id, asCopy ? null : draft.original?.revision ?? null);
       setNotes(previous => sortNotes([...previous.filter(entry => entry.id !== note.id), note]));
-      keepDraft(null); setConflict(false); setStatus(`“${note.title}” saved in this browser.`); restoreFocus.current = true;
+      keepDraft(null); setConflict(false); setStatus(`“${note.title}” saved on this Mac.`); restoreFocus.current = true;
     } catch (error) { setError(`Note could not be saved. ${noteStorageError(error)}`); setConflict(error instanceof NoteConflictError); }
     finally { lock.current = false; setBusy(false); }
   }
@@ -125,7 +125,7 @@ export function NoteLibrary() {
   }
 
   return <div className="notes-workspace"><section aria-label="Design notes">
-    <div className="notes-toolbar"><p className="storage-note">Your writing, saved only in this browser. Source links are stored without fetching their contents.</p>
+    <div className="notes-toolbar"><p className="storage-note">Your writing, saved only on this Mac. Source links are stored without fetching their contents.</p>
       <button ref={newRef} type="button" className="primary-button" disabled={loading || busy} onClick={() => edit()}>New note</button></div>
     {readError && <p className="font-error" role="alert">{readError}</p>}
     {error && <p className="font-error" role="alert">{error}</p>}
@@ -166,6 +166,6 @@ export function NoteLibrary() {
       </article></li>)}</ul>}
     </section>
     <PdfLibrary query={query} />
-    <p className="storage-note notes-footnote">Notes and PDFs belong to this browser profile and address. Clearing site data can remove them. Font backups do not include notes or PDFs. Other tabs see changes after refresh.</p>
+    <p className="storage-note notes-footnote">Notes and PDFs are saved on this Mac. Use Local library for browser imports and full-library backups. Other tabs see changes after refresh.</p>
   </div>;
 }
