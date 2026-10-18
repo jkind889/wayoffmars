@@ -8,10 +8,13 @@
     "start": "node scripts/start-standalone.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "playwright test"
+    "test": "playwright test",
+    "predev": "node scripts/prepare-pdfjs.mjs",
+    "prebuild": "node scripts/prepare-pdfjs.mjs"
   },
   "dependencies": {
     "next": "16.4.1",
+    "pdfjs-dist": "6.4.299",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

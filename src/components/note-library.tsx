@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { EMPTY_NOTE, NOTE_LIMITS, NoteConflictError, makeNote, noteFields, noteStorageError, readNotes, validFields, validateNote, validateSource, writeNote, type NoteFields, type SavedNote } from "@/lib/note-storage";
 
+import { PdfLibrary } from "./pdf-library";
+
 import { highlightText, searchNotes, searchTerms } from "@/lib/note-search";
 
 function HighlightedText({ text, terms }: { text: string; terms: string[] }) {
@@ -122,7 +124,7 @@ export function NoteLibrary() {
     finally { lock.current = false; setBusy(false); }
   }
 
-  return <section className="notes-workspace" aria-label="Design notes">
+  return <div className="notes-workspace"><section aria-label="Design notes">
     <div className="notes-toolbar"><p className="storage-note">Your writing, saved only in this browser. Source links are stored without fetching their contents.</p>
       <button ref={newRef} type="button" className="primary-button" disabled={loading || busy} onClick={() => edit()}>New note</button></div>
     {readError && <p className="font-error" role="alert">{readError}</p>}
@@ -142,13 +144,13 @@ export function NoteLibrary() {
       </fieldset>
       <p className="storage-note">Unfinished edits are recovered on refresh in this tab when browser storage is available. Save to keep a note after closing the tab.</p>
     </form>}
-    <div className="note-search" role="search" aria-label="Search your notes">
-      <label htmlFor="note-search">Search notes</label>
+    <div className="note-search" role="search" aria-label="Search your notes and PDFs">
+      <label htmlFor="note-search">Search notes and PDFs</label>
       <div className="search-controls"><input ref={searchRef} id="note-search" type="search" maxLength={200} value={query} placeholder="Try typography, color, or a phrase" aria-describedby="note-search-help" onChange={event => setQuery(event.target.value)} />
         {query && <button className="secondary-button" type="button" onClick={clearSearch}>Clear search</button>}</div>
-      <p className="storage-note" id="note-search-help">Search titles, bodies, and tags. Every keyword must match; capitalization does not matter.</p>
+      <p className="storage-note" id="note-search-help">Search note titles, bodies, and tags, plus PDF filenames and page text. Every keyword must match within one note or PDF page; capitalization does not matter.</p>
     </div>
-    <div className="library-heading"><h2>{searching ? "Search results" : "Saved notes"}</h2><span className="library-count" aria-live="polite">{searching ? `${results.length} of ${notes.length} notes` : `${notes.length} ${notes.length === 1 ? "note" : "notes"}`}</span></div>
+    <div className="library-heading"><h2>{searching ? "Note results" : "Saved notes"}</h2><span className="library-count" aria-live="polite">{searching ? `${results.length} of ${notes.length} notes` : `${notes.length} ${notes.length === 1 ? "note" : "notes"}`}</span></div>
     {loading ? <p className="storage-note">Loading your notes…</p> : notes.length === 0 ? <div className="empty-state"><h3>{readError ? "Your notes could not all be loaded" : "Room for your next idea"}</h3><p>{readError ? "Your stored data has been kept. You can still write a new note." : "Write your first note about type, color, layout, or anything that inspires you."}</p></div> :
       results.length === 0 ? <div className="empty-state"><h3>No notes found</h3><p>Try fewer keywords or a different word from your notes.</p><button className="secondary-button" type="button" onClick={clearSearch}>Show all notes</button></div> :
       <ul className="note-list">{results.map(({ note, snippets }) => <li key={note.id}><article className="note-card" aria-label={note.title}>
@@ -162,6 +164,8 @@ export function NoteLibrary() {
         {note.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul>}
         {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
       </article></li>)}</ul>}
-    <p className="storage-note notes-footnote">Notes belong to this browser profile and address. Clearing site data can remove them. Font backups do not include notes. Other tabs see changes after refresh.</p>
-  </section>;
+    </section>
+    <PdfLibrary query={query} />
+    <p className="storage-note notes-footnote">Notes and PDFs belong to this browser profile and address. Clearing site data can remove them. Font backups do not include notes or PDFs. Other tabs see changes after refresh.</p>
+  </div>;
 }

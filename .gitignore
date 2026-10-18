@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated, versioned local PDF.js worker and text resources
+/public/pdfjs/

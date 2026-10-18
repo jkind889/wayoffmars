@@ -72,7 +72,7 @@ test("saved notes are found by title, body and tags after refresh with snippets 
   await create(page, "Warm palette", "Terracotta and cream create a quiet warmth.", "color");
   await create(page, "Optical corrections", `${"Start with a careful type specimen. ".repeat(20)}Kerning adjusts the space between specific pairs. ${"Compare at print size. ".repeat(20)}`, "typography");
   await page.reload(); await expect(page.getByRole("article")).toHaveCount(3);
-  const search = page.getByRole("searchbox", { name: "Search notes", exact: true });
+  const search = page.getByRole("searchbox", { name: "Search notes and PDFs", exact: true });
   await search.fill("EDITORIAL");
   await expect(page.getByRole("article")).toHaveCount(1);
   await expect(page.getByRole("article").getByRole("heading")).toHaveText("Editorial grid");
@@ -113,7 +113,7 @@ test("search keeps drafts and reflects saved edits and deletions immediately", a
   await create(page, "Color study", "A warm palette", "color");
   await page.getByRole("button", { name: "Edit Color study" }).click();
   await page.getByLabel("Body", { exact: true }).fill("A cool palette");
-  const search = page.getByRole("searchbox", { name: "Search notes", exact: true });
+  const search = page.getByRole("searchbox", { name: "Search notes and PDFs", exact: true });
   await search.fill("no match");
   await expect(page.getByLabel("Body", { exact: true })).toHaveValue("A cool palette");
   await search.fill("cool"); await expect(page.getByRole("article")).toHaveCount(0);
@@ -128,7 +128,7 @@ test("search keeps drafts and reflects saved edits and deletions immediately", a
 
 test("empty library stays useful during search and HTML-looking input stays plain text", async ({ page }) => {
   await ready(page);
-  const search = page.getByRole("searchbox", { name: "Search notes", exact: true });
+  const search = page.getByRole("searchbox", { name: "Search notes and PDFs", exact: true });
   await search.fill("grid"); await expect(page.getByText("Room for your next idea")).toBeVisible();
   await page.getByRole("button", { name: "Clear search" }).click();
   await create(page, "C++ [grid]", '<img src=x onerror="alert(1)"> and literal (.*)', "code");

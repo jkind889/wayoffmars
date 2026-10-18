@@ -5,7 +5,7 @@ TTF, OTF, WOFF and WOFF2 files (up to 20 MiB each) to preview them in the browse
 
 ## Daily development
 
-Use Node.js 22 and npm:
+Use Node.js 22.13 or newer in the Node 22 release line and npm:
 
 ```bash
 npm ci
@@ -156,7 +156,7 @@ Notes have the same browser-profile/origin and eviction limitations as fonts.
 There is no note backup/export or live tab synchronization, and font backups do
 not include notes. Refresh other tabs to see saved changes.
 
-Search notes by typing literal keywords into **Search notes**. Matching ignores
+Search notes by typing literal keywords into **Search notes and PDFs**. Matching ignores
 capitalization and requires every whitespace-separated keyword somewhere in the
 title, body, or tags. It supports partial words and treats punctuation literally;
 there is no query syntax, stemming, semantic matching, or source-URL search.
@@ -169,3 +169,57 @@ Matching text is highlighted in titles, tags and up to three short body contexts
 the query keeps unsaved edits in the editor. Saving or deleting updates results
 immediately. The query resets on refresh. Search and snippets run entirely in the
 browser and do not send note text anywhere.
+
+
+## Local PDF search
+
+On **Notes**, use **Import PDF** in the PDF section. Import one text-based PDF at
+a time, up to **20 MiB**, **300 pages**, **100,000 extracted characters per page**
+and **2 million characters per document**. Parsing runs in a dedicated PDF.js
+worker, with page progress, cancellation and a 60-second timeout. The worker,
+CMaps and standard fonts are served from this app, never a CDN. Nothing is uploaded.
+`predev` and `prebuild` generate these versioned resources under `public/pdfjs/`
+from the pinned dependency; generated files are ignored by Git and ESLint.
+
+Only the filename, byte size, content hash, import date and extracted page text
+are persisted in the separate `wayoffmars-pdfs` IndexedDB database (schema v1).
+Original PDF bytes are not retained. Keep your source files: there is no PDF
+viewer, download or backup/export in this slice. Identical bytes, even under a
+new filename, are skipped atomically. Different PDFs with the same filename can
+coexist. Import success and deletion are shown only after storage commits.
+Deletion uses the same confirmation pattern as notes and prevents stale tabs
+from deleting a document that another tab has deleted and reimported.
+
+The shared search shows note results and PDF results in separate groups. PDF
+matches require every literal keyword in the filename or **the same page's text**;
+terms on different pages do not combine into a match. Page references are the
+one-based physical position in the PDF, including blank/image-only pages, rather
+than printed page labels such as roman numerals. Each matching page shows its
+filename, page number and highlighted text contexts. Filename-only matches show
+page context. Empty queries list imported PDFs. PDF matches rank filename hits
+above page-text hits, then by newest import, stable content identity and page.
+Search yields between page batches and displays at most 100 matching pages with
+the full match count; narrow the query to see other matches.
+
+Scanned/image-only PDFs, password-protected PDFs and XFA forms are rejected with
+an explanation. A PDF containing both text and image-only pages imports with a
+persistent count of pages without searchable text. Malformed or unsupported
+content, limits, storage failure and quota errors do not save a partial import.
+Extraction follows the PDF's text runs; complex reading order, missing character
+mappings, ligatures and line-end hyphenation can affect search. There is no OCR,
+semantic/AI search, account, sync or remote storage. Other tabs see changes after
+refresh. Clearing browser site data can remove the collection; font backups do
+not include PDF text or notes.
+
+`pdf-model.ts` defines storage-independent records; `pdf-extraction.ts` parses
+local input, `pdf-search.ts` produces page matches, and `pdf-storage.ts` is the
+IndexedDB adapter. A future storage backend can replace the adapter without
+combining extraction/search with persistence.
+
+The PDF tests use generated, valid PDF fixtures through the real parser in the
+Mac's installed Google Chrome. They cover mixed text/image pages, physical page
+references despite roman page labels, adjacent text runs, reload persistence,
+combined note/PDF search, duplicates, confirmed deletion, stale tabs, cancellation,
+timeout, malformed/unsupported inputs, limits, corrupted records and storage
+failures. Existing notes and font suites remain regression coverage. Tests use
+isolated browser contexts and do not touch the user's saved libraries.
