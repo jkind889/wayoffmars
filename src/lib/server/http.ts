@@ -3,7 +3,7 @@ export function guard(request: Request, mutation = false) {
   const host = request.headers.get('host') || '';
   if (!/^(localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/.test(host)) throw new Error('Local access only: invalid Host.');
   const origin = request.headers.get('origin');
-  if (origin && origin !== `http://${host}` && origin !== `https://${host}`) throw new Error('Local access only: invalid Origin.');
+  if (origin && origin !== `${new URL(request.url).protocol}//${host}`) throw new Error('Local access only: invalid Origin.');
   if (request.headers.get('sec-fetch-site') === 'cross-site') throw new Error('Cross-site access is not allowed.');
   if (mutation && (!origin || request.headers.get('x-wayoffmars') !== '1' || request.headers.get('content-type') !== 'application/json')) throw new Error('A same-origin app request is required.');
 }

@@ -59,7 +59,7 @@ are never edited or deleted. Each result appears in the import report.
 - Invalid or unreadable records are reported and retained in IndexedDB; healthy
   records can continue. A newer browser schema is not opened or downgraded.
 - Legacy PDF records contain text only, with no original bytes. They remain fully
-  searchable. In this slice new PDFs also retain only extracted text.
+  searchable. Use Attach original to associate the exact original file when you still have it.
 
 All browser profiles/ports served by the same local data directory now see the
 same library. Refresh other tabs to see changes. Notes use transactional revision
@@ -106,7 +106,7 @@ synchronization is performed.
 
 The Fonts page's existing JSON export/import remains a **fonts-only** portable
 backup (including preview-only fonts), with 500-font/100-MiB envelope limits.
-Use the full-library command for notes and PDF text as well.
+Use the full-library command for notes, PDF text and original PDFs as well.
 
 ## Docker
 
@@ -191,3 +191,50 @@ persistence, and backup/restore. Simulated drops do not prove Finder dragging.
 
 The previously reported five high-severity audit findings are in the development
 ESLint chain. No broad lint/dependency upgrade is included in this work.
+
+## Open a cited PDF page
+
+New PDF imports save both extracted text and the original file in one committed
+record, with SHA-256-verified immutable bytes in `assets/<sha256>`. Success is not
+reported until both are durable. The existing import size/page/text limits,
+progress, cancellation and duplicate handling still apply. Reimporting identical
+bytes skips the record; it does not replace metadata or implicitly attach a
+legacy original. Use the explicit attachment action for that case.
+
+Search in Notes, then choose **Open page N**. A separate tab renders that exact
+one-based **physical** page using the pinned PDF.js canvas API. The viewer checks
+the original hash, size and page count. Previous/Next and Go navigate physical
+pages, including blank/image pages; reload preserves the page URL. The expandable
+text below the canvas comes from the original page, not from the search index.
+Implementation follows the [PDF.js API](https://mozilla.github.io/pdf.js/api/draft/module-pdfjsLib.html)
+and [rendering examples](https://mozilla.github.io/pdf.js/examples/).
+
+For older text-only PDFs, **Attach original** validates the selected PDF through
+the same parser/limits, requires its SHA-256 hash, byte size and page count to
+match, and associates bytes without changing indexed text, metadata or revision.
+Renamed files are fine if bytes match. A changed/resaved PDF is a different file
+and is rejected. Use Import PDF for a separate changed document. Reattachment is
+idempotent and protects against stale records deleted/reimported in another tab.
+Canceling the picker does nothing; Cancel reattachment stops validation before
+saving. Once saving begins, keep the page open until the result is shown.
+
+Missing or damaged originals never remove searchable text. The viewer explains
+the problem and offers Retry and Reselect original; a checksum-matching file can
+repair missing/damaged bytes. If the original is unavailable, text search still
+works and cited-page opening remains unavailable. Full-library backup and restore
+include every attached original.
+
+The viewer uses canvas only: no PDF scripting manager, embedded HTML, interactive
+forms, annotation links or external PDF resources. Binary responses use an
+attachment/octet-stream response with `nosniff`, same-origin policy and sandbox
+CSP; they are not embedded in a browser-native PDF viewer. Canvas dimensions and
+image sizes are bounded and opening times out after 60 seconds. Very large or
+unusual artwork/images may not render completely; search text remains available.
+There is no annotation editing, printing UI, OCR, or full-featured PDF reader.
+
+Tests verify actual canvas pixels and extracted original-page text at physical
+pages 1, 2 (image-only) and 3 despite roman printed labels; navigation, reload,
+legacy/mismatched/repeated attachment, missing files, cancellation, invalid pages,
+checksum/revision rejection, inactive embedded scripts/links, and original bytes
+in verified backups. Mac Chrome desktop/mobile viewport checks are automated;
+Safari and Docker runtime are not verified here.

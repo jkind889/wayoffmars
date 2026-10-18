@@ -91,3 +91,35 @@ test('SQLite abort rolls back records and receipts; retry safely reuses verified
   expect(await retry.json()).toBe('imported and verified');
   expect(await (await request.get(`/api/library?kind=asset&id=${font.id}`)).json()).toBe(font.bytes);
 });
+
+test('empty and newer browser databases are reported without creation, downgrade or automatic migration', async ({ page }) => {
+  await page.goto('/library');
+  await page.getByRole('button', { name:'Import browser library' }).click();
+  await expect(page.getByLabel('Import report')).toContainText('Import finished');
+  await expect(page.getByLabel('Import report')).toContainText('notes: 0 browser records found');
+  expect(await page.evaluate(async () => (await indexedDB.databases()).filter(db => db.name?.startsWith('wayoffmars-')).length)).toBe(0);
+  await page.evaluate(() => new Promise<void>(resolve => { const open=indexedDB.open('wayoffmars-notes',2); open.onupgradeneeded=()=>open.result.createObjectStore('notes',{keyPath:'id'}); open.onsuccess=()=>{open.result.close();resolve();}; }));
+  await page.getByRole('button', { name:'Import browser library' }).click();
+  await expect(page.getByLabel('Import report')).toContainText('VersionError');
+  await expect(page.getByLabel('Import report')).toContainText('Import finished');
+  expect(await page.evaluate(async () => (await indexedDB.databases()).find(db=>db.name==='wayoffmars-notes')?.version)).toBe(2);
+});
+
+test('stopping between import records and retrying preserves completed receipts', async ({ page, request }) => {
+  await page.goto('/library');
+  await page.evaluate(note => new Promise<void>(resolve => {
+    const open=indexedDB.open('wayoffmars-notes',1); open.onupgradeneeded=()=>open.result.createObjectStore('notes',{keyPath:'id'});
+    open.onsuccess=()=>{const db=open.result,tx=db.transaction('notes','readwrite');for(let i=0;i<3;i++)tx.objectStore('notes').put({...note,id:`stop-${i}`});tx.oncomplete=()=>{db.close();resolve();};};
+  }), note);
+  let release!: () => void; const gate = new Promise<void>(resolve=>{release=resolve;}); let first=true, committed=false;
+  await page.route('**/api/library?kind=notes',async route=>{
+    if(first && route.request().method()==='POST'){first=false;const response=await route.fetch();committed=true;await gate;await route.fulfill({response});}else await route.continue();
+  });
+  await page.getByRole('button',{name:'Import browser library'}).click();await expect.poll(()=>committed).toBe(true);
+  await page.getByRole('button',{name:'Stop after current record'}).click();release();
+  await expect(page.getByLabel('Import report')).toContainText('Stopped after the current record');
+  expect(await (await request.get('/api/library?kind=notes')).json()).toHaveLength(1);
+  await page.getByRole('button',{name:'Import browser library'}).click();await expect(page.getByLabel('Import report')).toContainText('Import finished');
+  await expect(page.getByLabel('Import report')).toContainText('already imported');
+  expect(await (await request.get('/api/library?kind=notes')).json()).toHaveLength(3);
+});

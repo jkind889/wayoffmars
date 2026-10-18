@@ -2,7 +2,7 @@
 export const PDF_LIMITS = { bytes: 20 * 1024 * 1024, pages: 300, pageCharacters: 100_000, characters: 2_000_000, timeoutMs: 60_000 };
 export type PdfPage = { number: number; text: string };
 export type PdfText = { id: string; filename: string; byteSize: number; pages: PdfPage[] };
-export type SavedPdf = PdfText & { importedAt: number; revision: string };
+export type SavedPdf = PdfText & { importedAt: number; revision: string; hasOriginal?: boolean };
 
 export function validatePdf(value: unknown): SavedPdf {
   const pdf = value as SavedPdf;

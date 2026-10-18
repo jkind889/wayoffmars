@@ -2,7 +2,7 @@ import 'server-only';
 import { isDeepStrictEqual } from 'node:util';
 import { dataDirectory, digest, openLibrary, readAsset, storeAsset } from './database.mjs';
 import { validateNote, NoteConflictError } from '../note-model';
-import { validatePdf } from '../pdf-model';
+import { validatePdf, PDF_LIMITS } from '../pdf-model';
 import { validateSavedFont } from '../font-model';
 
 export type Kind = 'notes' | 'pdfs' | 'fonts';
@@ -20,7 +20,30 @@ function using<T>(fn: (db: ReturnType<typeof openLibrary>, directory: string) =>
   try { return fn(db, directory); } finally { db.close(); }
 }
 export function list(kind: Kind): unknown[] {
-  return using(db => db.prepare('SELECT data FROM records WHERE kind=? ORDER BY id').all(kind).map(row => JSON.parse(String(row.data))));
+  return using(db => db.prepare('SELECT data,asset FROM records WHERE kind=? ORDER BY id').all(kind).map(row => ({ ...JSON.parse(String(row.data)), ...(kind === 'pdfs' ? { hasOriginal: !!row.asset } : {}) })));
+}
+export function pdfRecord(id: string) {
+  return using(db => {
+    const row = db.prepare("SELECT data,asset FROM records WHERE kind='pdfs' AND id=?").get(identity(id));
+    if (!row) throw new Error('This PDF is no longer in the library.');
+    return { ...validatePdf(JSON.parse(String(row.data))), hasOriginal: !!row.asset };
+  });
+}
+export function pdfOriginal(id: string): Buffer {
+  return using((db, directory) => {
+    const row = db.prepare("SELECT data,asset FROM records WHERE kind='pdfs' AND id=?").get(identity(id));
+    if (!row?.asset) throw new Error('No original is attached. Reselect the original PDF; its checksum must match.');
+    const bytes = readAsset(directory, id);
+    if (bytes.byteLength !== validatePdf(JSON.parse(String(row.data))).byteSize) throw new Error('PDF file size mismatch. Reselect the original PDF.');
+    return bytes;
+  });
+}
+function pdfBytes(value: unknown, id: string, size: number): Buffer {
+  if (typeof value !== 'string' || value.length > 28 * 1024 * 1024) throw new Error('PDF original bytes are required (up to 20 MiB).');
+  const bytes = Buffer.from(value, 'base64');
+  if (bytes.toString('base64') !== value || !bytes.length || bytes.length > PDF_LIMITS.bytes || !bytes.subarray(0,1024).includes(Buffer.from('%PDF-'))) throw new Error('Invalid PDF original bytes.');
+  if (bytes.length !== size || digest(bytes) !== id) throw new Error('PDF checksum mismatch. Choose the exact original file; nothing was associated.');
+  return bytes;
 }
 export function asset(id: string): string {
   return using((db, directory) => {
@@ -55,13 +78,28 @@ async function validated(kind: Kind, value: unknown) {
 }
 export async function mutate(kind: Kind, input: Record<string, unknown>) {
   const action = input.action;
+  if (kind === 'pdfs' && action === 'attach') {
+    const id = identity(input.id);
+    return using((db, directory) => transaction(db, () => {
+      const row = db.prepare("SELECT data FROM records WHERE kind='pdfs' AND id=?").get(id);
+      if (!row) throw new Error('This PDF was deleted. Refresh the library before retrying.');
+      const current = validatePdf(JSON.parse(String(row.data)));
+      if (current.revision !== input.revision) throw new Error('This PDF was reimported in another tab. Refresh before attaching an original.');
+      const bytes = pdfBytes(input.original, id, current.byteSize);
+      storeAsset(directory, id, bytes);
+      db.prepare("UPDATE records SET asset=? WHERE kind='pdfs' AND id=?").run(id, id);
+      return true;
+    }));
+  }
   if (action === 'import' || action === 'save' || action === 'write' && input.note !== null) {
     const value = action === 'import' ? input.record : kind === 'notes' ? input.note : kind === 'pdfs' ? input.pdf : input.font;
-    const { data, bytes } = await validated(kind, value);
+    const checked = await validated(kind, value);
+    const data = checked.data;
+    const bytes = kind === 'pdfs' && action === 'save' ? pdfBytes(input.original, String(data.id), Number(data.byteSize)) : checked.bytes;
     const id = String(data.id);
     if (action === 'write' && input.id !== id) throw new Error('Note identity mismatch.');
     return using((db, directory) => transaction(db, () => {
-      const row = db.prepare('SELECT data FROM records WHERE kind=? AND id=?').get(kind, id);
+      const row = db.prepare('SELECT data,asset FROM records WHERE kind=? AND id=?').get(kind, id);
       const current = row ? JSON.parse(String(row.data)) : null;
       const fingerprint = digest(JSON.stringify(data));
       if (action === 'import') {
@@ -72,9 +110,9 @@ export async function mutate(kind: Kind, input: Record<string, unknown>) {
         if (current && (current.createdAt !== data.createdAt || current.revision === data.revision)) throw new Error('Invalid note revision.');
       } else if (current) return false;
       if (bytes) storeAsset(directory, id, bytes);
-      db.prepare('INSERT INTO records(kind,id,data,asset) VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data, asset=excluded.asset').run(kind, id, JSON.stringify(data), bytes ? id : null);
+      db.prepare('INSERT INTO records(kind,id,data,asset) VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data, asset=excluded.asset').run(kind, id, JSON.stringify(data), bytes ? id : row?.asset ?? null);
       if (action === 'import') {
-        const saved = db.prepare('SELECT data FROM records WHERE kind=? AND id=?').get(kind, id);
+        const saved = db.prepare('SELECT data,asset FROM records WHERE kind=? AND id=?').get(kind, id);
         if (!saved || !isDeepStrictEqual(JSON.parse(String(saved.data)), data)) throw new Error('Import verification failed.');
         if (bytes) readAsset(directory, id);
         db.prepare('INSERT INTO imports VALUES(?,?,?)').run(kind, id, fingerprint);
@@ -86,7 +124,7 @@ export async function mutate(kind: Kind, input: Record<string, unknown>) {
   if (action === 'delete' || action === 'write' && input.note === null) {
     const id = identity(input.id);
     return using(db => transaction(db, () => {
-      const row = db.prepare('SELECT data FROM records WHERE kind=? AND id=?').get(kind, id);
+      const row = db.prepare('SELECT data,asset FROM records WHERE kind=? AND id=?').get(kind, id);
       const current = row ? JSON.parse(String(row.data)) : null;
       if (kind === 'notes' && (current?.revision ?? null) !== input.expectedRevision) throw new NoteConflictError();
       if (kind === 'pdfs' && current && current.revision !== input.revision) throw new Error('This PDF was reimported in another tab. Refresh before deleting it.');

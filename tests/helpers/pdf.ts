@@ -1,13 +1,13 @@
 /** Tiny valid PDFs generated in tests; no third-party document content. */
-export function makePdf(pages: string[], encrypted = false, xfa = false): Buffer {
+export function makePdf(pages: string[], encrypted = false, xfa = false, active = false): Buffer {
   const objects = [
-    `<< /Type /Catalog /Pages 2 0 R /PageLabels << /Nums [0 << /S /r >>] >>${xfa ? ` /AcroForm << /XFA ${5 + pages.length * 2} 0 R >>` : ""} >>`,
+    `<< /Type /Catalog ${active ? '/OpenAction << /S /JavaScript /JS <6170702e616c65727428226163746976652229> >>' : ''} /Pages 2 0 R /PageLabels << /Nums [0 << /S /r >>] >>${xfa ? ` /AcroForm << /XFA ${5 + pages.length * 2} 0 R >>` : ""} >>`,
     `<< /Type /Pages /Count ${pages.length} /Kids [${pages.map((_, i) => `${4 + i * 2} 0 R`).join(" ")}] >>`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
   ];
   const imageId = 4 + pages.length * 2;
   for (const stream of pages) {
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Resources << /Font << /F1 3 0 R >> /XObject << /Scan ${imageId} 0 R >> >> /Contents ${objects.length + 2} 0 R >>`);
+    objects.push(`<< /Type /Page ${active ? '/Annots [<< /Type /Annot /Subtype /Link /Rect [0 0 600 800] /A << /S /URI /URI (https://example.invalid/pdf-active-content) >> >>]' : ''} /Parent 2 0 R /MediaBox [0 0 600 800] /Resources << /Font << /F1 3 0 R >> /XObject << /Scan ${imageId} 0 R >> >> /Contents ${objects.length + 2} 0 R >>`);
     objects.push(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`);
   }
   // An image-only page exercises the no-text path without requiring OCR assets.

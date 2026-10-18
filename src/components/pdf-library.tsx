@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ReattachPdf } from "./reattach-pdf";
 import { extractPdf } from "@/lib/pdf-extraction";
 import { validatePdf, type SavedPdf } from "@/lib/pdf-model";
 import { deletePdf, pdfStorageError, readPdfs, savePdf } from "@/lib/pdf-storage";
@@ -73,7 +74,8 @@ export function PdfLibrary({ query }: { query: string }) {
       controller.signal.throwIfAborted();
       setPhase("saving"); setStatus(`Saving “${file.name}”…`);
       const pdf: SavedPdf = { ...text, importedAt: Date.now(), revision: crypto.randomUUID() };
-      const added = await savePdf(pdf);
+      const added = await savePdf(pdf, await file.arrayBuffer());
+      pdf.hasOriginal = true;
       if (added) {
         setPdfs(previous => sortPdfs([...previous.filter(entry => entry.id !== pdf.id), pdf]));
         const empty = pdf.pages.filter(page => !page.text).length;
@@ -108,7 +110,7 @@ export function PdfLibrary({ query }: { query: string }) {
         const file = event.target.files?.[0]; event.target.value = "";
         if (file) void importPdf(file);
       }} /></div>
-    <p className="storage-note pdf-help">Text-based PDFs, up to 20 MiB and 300 pages each. Only extracted text is saved here; keep your original files. Nothing leaves this Mac.</p>
+    <p className="storage-note pdf-help">Text-based PDFs, up to 20 MiB and 300 pages each. Original files and searchable text are saved on this Mac. Nothing leaves this Mac.</p>
     {readError && <p className="font-error" role="alert">{readError}</p>}
     {error && <p className="font-error" role="alert">{error}</p>}
     {status && <p className="note-status" role="status">{status}</p>}
@@ -119,8 +121,11 @@ export function PdfLibrary({ query }: { query: string }) {
         <div className="note-card-heading"><h3><Highlight text={pdf.filename} terms={terms} /></h3>
           <button type="button" className="secondary-button" disabled={busy} onClick={() => void remove(pdf)} aria-label={`Delete PDF ${pdf.filename}`}>Delete</button></div>
         <p className="storage-note">{pdf.pages.length} pages · Saved on this Mac{pdf.pages.some(page => !page.text) ? ` · ${pdf.pages.filter(page => !page.text).length} page(s) without searchable text` : ""}</p>
+        <p className="storage-note">{pdf.hasOriginal ? "Original PDF retained." : "Text only — reattach the original to open cited pages."}</p>
+        <ReattachPdf pdf={pdf} onAttached={() => { setStatus('Original attached and checksum verified.'); setPdfs(previous => previous.map(entry => entry.id === pdf.id ? { ...entry, hasOriginal: true } : entry)); }} />
         {searching && matches.filter(match => match.pdf.id === pdf.id).map(match => <div className="pdf-page-result" key={match.page}>
           <h4>Page {match.page}</h4>
+          {pdf.hasOriginal && <a className="secondary-button" href={`/pdf/${pdf.id}?page=${match.page}`} target="_blank" rel="noopener noreferrer">Open page {match.page}</a>}
           <div className="note-snippets">{match.snippets.map((snippet, index) => <p key={index}><Highlight text={snippet} terms={terms} /></p>)}</div>
         </div>)}
       </article>
