@@ -27,17 +27,27 @@ export function LocalLibrary() {
       setReport(results);
     } finally { setBusy(false); }
   }
-  return <section className="note-library" aria-label="Local library storage">
+  return <section className="storage-workspace" aria-label="Local library storage">
+    <div className="page-intro">
     <h1>Local library</h1>
     <p>Images, notes, searchable PDF text and fonts live on this Mac in SQLite and a local asset folder. Nothing is sent to an external service.</p>
-    <h2>Import your browser library</h2>
+    </div>
+    <section className="storage-section" aria-labelledby="browser-import-heading">
+    <h2 id="browser-import-heading">Import your browser library</h2>
+    <div>
     <p>Use the same browser profile and address where you saved your library. This copies records and font bytes only when you choose Import. Existing text-only PDFs remain searchable. Your IndexedDB data is never deleted or edited.</p>
     <p>Each record is validated and verified after writing. You can stop and repeat the import. Already imported records are skipped, even if you later edited or deleted them here. Conflicting records are skipped: keep the SQLite version, or copy the browser note manually as a new note. No automatic overwrite.</p>
     <button className="primary-button" disabled={busy} onClick={() => void run()}>Import browser library</button>
     {busy && <button className="secondary-button" onClick={() => { stop.current = true; }}>Stop after current record</button>}
     <p aria-live="polite">{busy ? 'Importing… Keep this page open.' : ''}</p>
     {report.length > 0 && <div aria-label="Import report"><ul>{report.map((line, index) => <li key={index}>{line}</li>)}</ul><p>Reload Fonts or Notes to see the local library.</p></div>}
-    <h2>Backup and restore</h2>
+    </div>
+    </section>
+    <section className="storage-section" aria-labelledby="backup-heading">
+    <h2 id="backup-heading">Backup and restore</h2>
+    <div>
     <p>Run <code>npm run backup -- /absolute/path/to/new-backup</code> in the app folder. This creates a consistent SQLite snapshot and verifies every referenced asset. For restore, stop the app and run <code>npm run restore -- /absolute/path/to/backup /absolute/path/to/new-library</code>, then start with <code>WAYOFFMARS_DATA_DIR</code> set to that new library. See README for full steps.</p>
+    </div>
+    </section>
   </section>;
 }

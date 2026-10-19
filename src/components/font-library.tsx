@@ -253,7 +253,7 @@ export function FontLibrary() {
         </p>
       </div>
 
-      <section className="library" aria-labelledby="library-heading">
+      <section className="library font-library" aria-labelledby="library-heading">
         <div className="library-heading">
           <h2 id="library-heading">Library</h2>
           <span className="library-count">{readyCount} {readyCount === 1 ? "font" : "fonts"}</span>
