@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { loadFontBytes, readFont } from "@/lib/font-loader";
 import { fontIdentity, readSavedFonts, removeSavedFont, saveFont, storageError, validateSavedFont, type SavedFont } from "@/lib/font-storage";
 import { createBackup, readBackup, readBackupFont } from "@/lib/font-backup";
+import { InstalledFonts } from "./installed-fonts";
+import { DEFAULT_FONT_APPEARANCE, FontPreviewControls, specimenAppearance } from "./font-preview-controls";
 
 type PreviewFont = { id: string; name: string } & (
   | { status: "loading" }
@@ -25,6 +27,8 @@ export function FontLibrary() {
   const [isWorking, setIsWorking] = useState(false);
   const [previewText, setPreviewText] = useState(SAMPLE_TEXT);
   const [previewSize, setPreviewSize] = useState(32);
+  const [appearance, setAppearance] = useState(DEFAULT_FONT_APPEARANCE);
+  const previewStyle = { ...specimenAppearance(appearance), fontSize: `${previewSize}px` };
   const [removed, setRemoved] = useState<SavedFont | null>(null);
   const working = useRef(false);
   const records = useRef(new Map<string, SavedFont>());
@@ -147,6 +151,24 @@ export function FontLibrary() {
     finally { endWork(); }
   }
 
+  async function saveInstalledFont(input: SavedFont) {
+    if (!beginWork()) throw new Error("Wait for the current library operation, then retry.");
+    const currentGeneration = generation.current;
+    try {
+      // Preserve the existing filename/date for a matching library asset.
+      const record = await validateSavedFont(records.current.get(input.id) ?? input);
+      const family = `wayoffmars-${record.id}`;
+      const face = loadedFaces.current.get(record.id) ?? await loadFontBytes(record.bytes, family);
+      await saveFont(record);
+      if (generation.current !== currentGeneration) return;
+      document.fonts.add(face);
+      loadedFaces.current.set(record.id, face);
+      records.current.set(record.id, record);
+      setFonts(previous => [...previous.filter(font => font.id !== record.id), { id: record.id, name: record.name, status: "ready", family, saved: true }]);
+      setStorageMessage("");
+    } finally { if (generation.current === currentGeneration) endWork(); }
+  }
+
   async function removeFont(font: PreviewFont) {
     if (font.status !== "ready" || !beginWork()) return;
     try {
@@ -265,6 +287,7 @@ export function FontLibrary() {
           <label className="preview-size">Preview size: {previewSize}px
             <input type="range" min="12" max="96" value={previewSize} onChange={(event) => setPreviewSize(Number(event.target.value))} />
           </label>
+          <FontPreviewControls value={appearance} onChange={setAppearance} />
           <div className="backup-actions">
             <button type="button" className="secondary-button" disabled={disabled} onClick={() => void exportBackup()}>Export backup</button>
             <button type="button" className="secondary-button" disabled={disabled} onClick={() => backupInputRef.current?.click()}>Import backup</button>
@@ -275,6 +298,8 @@ export function FontLibrary() {
           }} />
           <p className="storage-note">Saved on this Mac. Use Local library to import older browser data and back up the complete library.</p>
         </div>
+        <div className="font-specimens">
+        <InstalledFonts disabled={disabled} text={previewText} style={previewStyle} onSave={saveInstalledFont} />
         {fonts.length === 0 ? (
           <div className="empty-state"><h3>Your collection starts here.</h3><p>Choose a font file to get started.</p></div>
         ) : (
@@ -290,7 +315,7 @@ export function FontLibrary() {
                   <>
                     <p className="font-save-status">{font.saved ? "Saved on this Mac" : "Preview only — not saved"}</p>
                     {!font.saved ? <button type="button" className="secondary-button" disabled={disabled} onClick={() => void retrySave(font.id)}>Retry saving</button> : null}
-                    <p className="font-sample" style={{ fontFamily: `"${font.family}"`, fontSize: `${previewSize}px` }}>{previewText || " "}</p>
+                    <p className="font-sample" style={{ ...previewStyle, fontFamily: `"${font.family}"` }}>{previewText || " "}</p>
                   </>
                 ) : (
                   <p className={font.status === "error" ? "font-error" : "font-loading"}>{font.status === "error" ? font.message : "Loading font…"}</p>
@@ -299,6 +324,7 @@ export function FontLibrary() {
             ))}
           </ul>
         )}
+        </div>
       </section>
     </>
   );

@@ -216,3 +216,30 @@ summary { width: fit-content; padding-block: 10px; cursor: pointer; font-size: 1
 @media (prefers-reduced-motion: reduce) {
   .drop-zone { transition: none; }
 }
+
+/* Font appearance is scoped to specimens; controls always use the app palette. */
+.font-specimens { min-width: 0; }
+.font-appearance { display: grid; gap: 16px; min-width: 0; margin: 0; padding: 16px 0 0; border: 0; border-top: 1px solid var(--border); }
+.font-appearance legend { padding: 0 8px 0 0; font-size: 13px; font-weight: 600; }
+.font-appearance label, .installed-font-picker label { display: grid; gap: 8px; min-width: 0; font-size: 13px; }
+.font-appearance input, .font-appearance select, .installed-font-picker select { width: 100%; min-width: 0; min-height: 40px; padding: 8px; border: 1px solid var(--border); font-size: 16px; }
+.font-appearance .preview-color { grid-template-columns: 1fr 48px; align-items: center; }
+.preview-color input { padding: 4px; }
+.preview-color span { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.font-sample { padding: 12px; }
+.installed-fonts { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--rule); }
+.installed-fonts > .storage-note { margin-top: 12px; max-width: 80ch; }
+.installed-fonts > .note-status:empty { margin: 0; min-height: 0; }
+.installed-font-picker { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.installed-font-picker label { flex: 1 1 240px; max-width: 100%; }
+.installed-font-picker button { flex: 0 1 auto; }
+.installed-font-preview { margin-top: 24px; padding: 16px; border: 1px solid var(--border); overflow-wrap: anywhere; }
+.installed-font-preview h3 { min-width: 0; margin: 0; font-size: 16px; font-weight: 500; }
+@media (min-width: 601px) and (max-width: 800px) {
+  .font-appearance { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .font-appearance > .storage-note { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .font-appearance, .installed-font-picker { grid-column: 1 / -1; }
+  .installed-font-preview { padding: 12px; }
+}

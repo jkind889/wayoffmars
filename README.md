@@ -23,6 +23,32 @@ Origin, rejects cross-site requests, and requires a custom header and JSON for
 mutations. Do not expose it through a proxy, tunnel, LAN binding or port forward.
 There is no authentication against other processes/users on this Mac.
 
+## Font previews and installed fonts
+
+The Fonts workspace previews uploaded TTF, OTF, WOFF and WOFF2 files. Text, size,
+tracking (em), line height, alignment, and text/background colors apply only to
+specimens. Preview settings reset when leaving the page; Reset appearance restores
+tracking, leading, alignment and colors without changing text or size.
+
+**Browse installed fonts** optionally requests the browser's Local Font Access
+permission from a click. Desktop Chrome supports this API in a secure context
+(including loopback localhost/127.0.0.1). Safari, Firefox and unsupported browsers
+retain the file-import workflow. Denying or dismissing permission does not block
+uploaded fonts. Browser site settings can revoke a remembered font permission.
+
+The returned font list remains in tab memory. Select a face and choose **Preview
+installed font** to read its bytes into a temporary preview. **Save to library** is
+an explicit, separate action that validates, hashes and stores a copy through the
+existing local API. Until saved, installed previews are excluded from exports and
+backups; changing selection, clearing the preview or leaving the page releases it.
+Browsing again refreshes the inventory. If a font has been removed or cannot be
+read, retry browsing or choose its file. Saved copies remain available independently
+of OS installation. Nothing sends font inventories or bytes to external services.
+
+No weight synthesis, variable-axis editor or OpenType feature parser is added.
+Automated font-access checks use mocked handles and synthetic permission outcomes;
+they never grant real browser font permissions or enumerate the user's fonts.
+
 ## Local storage and existing browser libraries
 
 By default the library lives at:
