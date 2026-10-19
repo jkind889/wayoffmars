@@ -281,3 +281,7 @@ summary { width: fit-content; padding-block: 10px; cursor: pointer; font-size: 1
 .excerpt-capture select { padding: .65rem; width: 100%; min-width: 0; font: inherit; background: white; color: #111; border: 1px solid #777; }
 .excerpt-card { border-left: 2px solid #777; padding: 1rem; margin: 1rem 0; overflow-wrap: anywhere; }
 .excerpt-card blockquote { margin: 0 0 1rem; }
+
+.note-pagination { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
+.note-pagination label { display: grid; gap: 6px; }
+.note-pagination select { min-height: 40px; }
