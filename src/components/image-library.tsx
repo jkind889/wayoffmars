@@ -27,7 +27,7 @@ export function ImageLibrary() {
     const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', protect); return () => window.removeEventListener('beforeunload', protect);
   }, [dirty, busy]);
-  useEffect(() => { if (!busy && restoreFocus.current) { importButton.current?.focus(); restoreFocus.current = false; } }, [busy]);
+  useEffect(() => { if (!busy && !loading && restoreFocus.current) { importButton.current?.focus(); restoreFocus.current = false; } });
   useEffect(() => { if (selected?.id) detail.current?.focus(); }, [selected?.id]);
   function choose(image: SavedImage | null) {
     if (lock.current || dirty && !window.confirm('Discard your unsaved image edits?')) return;

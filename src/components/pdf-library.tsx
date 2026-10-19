@@ -25,6 +25,7 @@ export function PdfLibrary({ query }: { query: string }) {
   const importButton = useRef<HTMLButtonElement>(null);
   const operation = useRef<AbortController | null>(null);
   const lock = useRef(false);
+  const restoreFocus = useRef(false);
   const terms = useMemo(() => searchTerms(query), [query]);
   const searching = terms.length > 0;
   const searchPending = searching && (search?.query !== query || search?.pdfs !== pdfs);
@@ -63,6 +64,12 @@ export function PdfLibrary({ query }: { query: string }) {
     return () => window.removeEventListener("beforeunload", protect);
   }, [busy]);
 
+  useEffect(() => {
+    if (!busy && !loading && restoreFocus.current) {
+      importButton.current?.focus(); restoreFocus.current = false;
+    }
+  });
+
   async function importPdf(file: File) {
     if (lock.current) return;
     lock.current = true;
@@ -85,8 +92,7 @@ export function PdfLibrary({ query }: { query: string }) {
       setStatus(controller.signal.aborted ? "PDF import canceled. Nothing was saved." : "");
       if (!controller.signal.aborted) setError(`PDF could not be imported. ${pdfStorageError(error)}`);
     } finally {
-      operation.current = null; lock.current = false; setPhase("idle");
-      requestAnimationFrame(() => importButton.current?.focus());
+      operation.current = null; lock.current = false; restoreFocus.current = true; setPhase("idle");
     }
   }
 
@@ -98,7 +104,7 @@ export function PdfLibrary({ query }: { query: string }) {
       setPdfs(previous => previous.filter(entry => entry.id !== pdf.id));
       setStatus(`“${pdf.filename}” deleted.`);
     } catch (error) { setError(`PDF could not be deleted. ${pdfStorageError(error)}`); }
-    finally { lock.current = false; setPhase("idle"); requestAnimationFrame(() => importButton.current?.focus()); }
+    finally { lock.current = false; restoreFocus.current = true; setPhase("idle"); }
   }
 
   const matches = searchPending ? [] : search?.matches ?? [];
