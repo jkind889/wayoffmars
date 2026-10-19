@@ -237,3 +237,14 @@ test('shared form boundaries remain distinguishable on both app surfaces', async
   });
   expect(Math.min(...contrast)).toBeGreaterThanOrEqual(3);
 });
+
+test('installed comparison retains an explicit temporary copy and releases it on clear', async ({ page, request }) => {
+  await mockFonts(page); await ready(page); await preview(page);
+  await page.getByRole('button', { name: 'Shortlist installed font' }).click();
+  await expect(page.getByText('1 of 4 fonts shortlisted.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear installed preview' }).click();
+  expect(await page.evaluate(() => Array.from(document.fonts).some(face => face.family.startsWith('compare-')))).toBe(true);
+  expect(await (await request.get('/api/library?kind=fonts')).json()).toHaveLength(0);
+  await page.getByRole('button', { name: 'Clear shortlist' }).click();
+  await expect.poll(() => page.evaluate(() => Array.from(document.fonts).some(face => face.family.startsWith('compare-')))).toBe(false);
+});

@@ -7,10 +7,13 @@ import { localFontAvailability, localFontError, queryInstalledFonts, readInstall
 type Preview = { record: SavedFont; label: string; family: string };
 const subscribeToCapability = () => () => {};
 const serverCapability = () => 'Checking installed-font support…';
-export function InstalledFonts({ disabled, text, style, onSave }: {
+export function InstalledFonts({ disabled, text, style, onSave, onCompare, comparisonFull, comparisonIds }: {
   disabled: boolean;
   text: string;
   style: CSSProperties;
+  onCompare: (font: SavedFont, name: string) => Promise<void>;
+  comparisonFull: boolean;
+  comparisonIds: string[];
   onSave: (font: SavedFont) => Promise<void>;
 }) {
   const availability = useSyncExternalStore(subscribeToCapability, localFontAvailability, serverCapability);
@@ -105,6 +108,7 @@ export function InstalledFonts({ disabled, text, style, onSave }: {
     </div>}
     {preview && <div ref={previewRegion} tabIndex={-1} className="installed-font-preview" aria-label="Installed font preview">
       <div className="font-row-heading"><h3>{preview.label}</h3><button className="secondary-button" type="button" disabled={busy} onClick={() => void save()}>Save to library</button></div>
+      <button type="button" className="secondary-button" disabled={busy || comparisonFull || comparisonIds.includes(`installed:${preview.record.id}`)} onClick={() => { void onCompare(preview.record, preview.label).catch(error => setError(localFontError(error))); }}>Shortlist installed font</button>
       <p className="font-save-status">Installed font · temporary preview</p>
       <p className="font-sample" style={{ ...style, fontFamily: `"${preview.family}"` }}>{text || ' '}</p>
       <button className="secondary-button" type="button" disabled={busy} onClick={() => { pendingFocus.current = true; clearPreview(); setStatus('Installed preview cleared. Saved library copies are kept.'); }}>Clear installed preview</button>

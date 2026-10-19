@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { loadFontBytes, readFont } from "@/lib/font-loader";
 import { fontIdentity, readSavedFonts, removeSavedFont, saveFont, storageError, validateSavedFont, type SavedFont } from "@/lib/font-storage";
 import { createBackup, readBackup, readBackupFont } from "@/lib/font-backup";
+import { localRequest } from "@/lib/local-client";
+import { Comparison, CompareChoice, useShortlist } from "./comparison";
 import { InstalledFonts } from "./installed-fonts";
 import { DEFAULT_FONT_APPEARANCE, FontPreviewControls, specimenAppearance } from "./font-preview-controls";
 
@@ -34,6 +36,29 @@ export function FontLibrary() {
   const records = useRef(new Map<string, SavedFont>());
   const loadedFaces = useRef(new Map<string, FontFace>());
   const generation = useRef(0);
+  const shortlist = useShortlist();
+  const [query, setQuery] = useState('');
+  const [missing, setMissing] = useState<string[]>([]);
+  const [installedComparisons, setInstalledComparisons] = useState<{ id: string; name: string; family: string }[]>([]);
+  const compareFaces = useRef(new Map<string, FontFace>());
+  const comparisonLock = useRef(false);
+  useEffect(() => { const faces = compareFaces.current; return () => { for (const face of faces.values()) document.fonts.delete(face); }; }, []);
+  useEffect(() => { for (const [id, face] of compareFaces.current) { if (!shortlist.ids.includes(id)) { document.fonts.delete(face); compareFaces.current.delete(id); } } }, [shortlist.ids]);
+  async function shortlistInstalled(record: SavedFont, name: string) {
+    if (comparisonLock.current || shortlist.ids.length >= 4) return;
+    comparisonLock.current = true;
+    const currentGeneration = generation.current;
+    try {
+      const id = `installed:${record.id}`, family = `compare-${record.id}`;
+      if (!compareFaces.current.has(id)) {
+        const face = await loadFontBytes(record.bytes, family);
+        if (generation.current !== currentGeneration) return;
+        if (!shortlist.toggle(id)) return;
+        document.fonts.add(face); compareFaces.current.set(id, face);
+      }
+      setInstalledComparisons(previous => [...previous.filter(item => item.id !== id && shortlist.ids.includes(item.id)), { id, name, family }]);
+    } finally { comparisonLock.current = false; }
+  }
   const disabled = isRestoring || isWorking;
 
   useEffect(() => {
@@ -298,13 +323,28 @@ export function FontLibrary() {
           }} />
           <p className="storage-note">Saved on this Mac. Use Local library to import older browser data and back up the complete library.</p>
         </div>
+        <Comparison kind="fonts" count={shortlist.ids.length} onClear={shortlist.clear} onOpen={async () => {
+          const saved = await localRequest<{ id: string }[]>('fonts');
+          setMissing(fonts.filter(font => font.status === 'ready' && font.saved && !saved.some(item => item.id === font.id)).map(font => font.id));
+        }}>
+          <label>Comparison text<textarea maxLength={5000} value={previewText} onChange={event => setPreviewText(event.target.value)} /></label>
+          <label>Comparison size: {previewSize}px<input type="range" min="12" max="96" value={previewSize} onChange={event => setPreviewSize(Number(event.target.value))} /></label>
+          <FontPreviewControls value={appearance} onChange={setAppearance} />
+          <div className="comparison-grid">{shortlist.ids.map(id => {
+            const installed = installedComparisons.find(item => item.id === id);
+            const saved = fonts.find(item => item.id === id);
+            const font = installed ?? (saved?.status === 'ready' && !missing.includes(id) ? saved : null);
+            return <article key={id} className="comparison-card"><h3>{font?.name ?? 'Font no longer available'}</h3><p className="storage-note">{installed ? 'Installed font · temporary comparison' : saved?.status === 'ready' && saved.saved ? 'Saved on this Mac' : 'Preview only'}</p>{font ? <p className="font-sample" style={{ ...previewStyle, fontFamily: `"${font.family}"` }}>{previewText || ' '}</p> : <p>This font was removed or could not be loaded.</p>}<button type="button" className="secondary-button" onClick={() => shortlist.toggle(id)}>Remove from comparison</button></article>;
+          })}</div>
+        </Comparison>
+        <label>Filter saved fonts<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
         <div className="font-specimens">
-        <InstalledFonts disabled={disabled} text={previewText} style={previewStyle} onSave={saveInstalledFont} />
+        <InstalledFonts disabled={disabled} text={previewText} style={previewStyle} onSave={saveInstalledFont} onCompare={shortlistInstalled} comparisonFull={shortlist.ids.length >= 4} comparisonIds={shortlist.ids} />
         {fonts.length === 0 ? (
           <div className="empty-state"><h3>Your collection starts here.</h3><p>Choose a font file to get started.</p></div>
         ) : (
           <ul className="font-list" aria-label="Selected fonts">
-            {fonts.map((font) => (
+            {fonts.filter(font => font.name.toLowerCase().includes(query.trim().toLowerCase())).map((font) => (
               <li key={font.id} className="font-row" aria-busy={font.status === "loading"}>
                 <div className="font-row-heading">
                   <h3>{font.name}</h3>
@@ -313,6 +353,7 @@ export function FontLibrary() {
                 </div>
                 {font.status === "ready" ? (
                   <>
+                    <CompareChoice name={font.name} selected={shortlist.ids.includes(font.id)} full={shortlist.ids.length >= 4} onClick={() => shortlist.toggle(font.id)} />
                     <p className="font-save-status">{font.saved ? "Saved on this Mac" : "Preview only — not saved"}</p>
                     {!font.saved ? <button type="button" className="secondary-button" disabled={disabled} onClick={() => void retrySave(font.id)}>Retry saving</button> : null}
                     <p className="font-sample" style={{ ...previewStyle, fontFamily: `"${font.family}"` }}>{previewText || " "}</p>

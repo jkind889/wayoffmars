@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { IMAGE_LIMITS, imageFields, type SavedImage, type ImageFields } from '@/lib/image-model';
 import { localRequest, encodeBytes } from '@/lib/local-client';
 import { ImageNoteLinks } from './image-note-links';
+import { Comparison, CompareChoice, useShortlist } from './comparison';
 import { ImagePreview } from './image-preview';
 const fieldsOf = (image: SavedImage): ImageFields => ({ title: image.title, source: image.source, description: image.description });
 export function ImageLibrary() {
@@ -10,6 +11,8 @@ export function ImageLibrary() {
   const [fields, setFields] = useState<ImageFields>({ title: '', source: '', description: '' });
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(''), [status, setStatus] = useState('');
   const restoreFocus = useRef(false), input = useRef<HTMLInputElement>(null), lock = useRef(false), detail = useRef<HTMLElement>(null), importButton = useRef<HTMLButtonElement>(null);
+  const shortlist = useShortlist();
+  const [query, setQuery] = useState('');
   const dirty = selected !== null && JSON.stringify(fields) !== JSON.stringify(fieldsOf(selected));
   useEffect(() => {
     let canceled = false;
@@ -85,9 +88,13 @@ export function ImageLibrary() {
       <p><a href={`/tags?kind=images&id=${encodeURIComponent(selected.id)}`}>Manage shared tags</a></p>
       <ImageNoteLinks key={`${selected.id}:${selected.revision}`} kind="images" id={selected.id} disabled={busy} />
     </section>}
+    <Comparison kind="images" count={shortlist.ids.length} onClear={shortlist.clear} onOpen={async () => { setImages(await localRequest<SavedImage[]>('images')); }}>
+      <div className="comparison-grid">{shortlist.ids.map(id => { const image = images.find(item => item.id === id); return <article className="comparison-card" key={id}><h3>{image?.title ?? 'Image no longer available'}</h3>{image ? <><ImagePreview id={id} title={image.title} detail /><p>{image.width} × {image.height} · {image.format.toUpperCase()}</p><p>{image.description}</p></> : <p>This item was deleted. Remove it from the shortlist.</p>}<button type="button" className="secondary-button" onClick={() => shortlist.toggle(id)}>Remove from comparison</button></article>; })}</div>
+    </Comparison>
+    <label>Filter images<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
     <div className="library-heading"><h2>Saved images</h2><span className="library-count">{images.length} images</span></div>
-    {loading ? <p role="status">Loading your images…</p> : !images.length ? <p className="empty-state">Import your first image reference.</p> : <ul className="image-gallery">{[...images].sort((a,b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id)).map(image => <li key={image.id}>
-      <ImagePreview id={image.id} title={image.title} /><button className="secondary-button" disabled={busy} onClick={() => choose(image)}>Open {image.title}</button>{image.description && <p>{image.description}</p>}
+    {loading ? <p role="status">Loading your images…</p> : !images.length ? <p className="empty-state">Import your first image reference.</p> : <ul className="image-gallery">{[...images].filter(image => image.title.toLowerCase().includes(query.trim().toLowerCase())).sort((a,b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id)).map(image => <li key={image.id}>
+      <ImagePreview id={image.id} title={image.title} /><CompareChoice name={image.title} selected={shortlist.ids.includes(image.id)} full={shortlist.ids.length >= 4} onClick={() => shortlist.toggle(image.id)} /><button className="secondary-button" disabled={busy} onClick={() => choose(image)}>Open {image.title}</button>{image.description && <p>{image.description}</p>}
     </li>)}</ul>}
   </section>;
 }
