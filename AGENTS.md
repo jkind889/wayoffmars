@@ -14,8 +14,8 @@ wayoffmars is a single-user, Mac-local library for fonts, images, design notes
 and PDFs.
 There are no accounts, cloud uploads or hosted services. Preserve the user's
 favicon and unrelated working-tree edits. Images and explicit image/note
-references are implemented.
-OCR, annotation, moodboards, shared tags and image AI are outside that scope.
+references and shared tags across notes, images and PDFs are implemented.
+OCR, annotation, moodboards, font tagging and image AI are outside that scope.
 
 ## Code map
 
@@ -26,7 +26,9 @@ OCR, annotation, moodboards, shared tags and image AI are outside that scope.
 - `src/lib/server/repository.ts`: validated mutations and revision checks;
   `database.mjs`: SQLite, migrations and content-addressed immutable assets.
   `images.ts`: raster validation/metadata; `image-links.ts`: revision-checked
-  references backed by cascading SQLite foreign keys. `http.ts`: loopback
+  references backed by cascading SQLite foreign keys. `tags.ts` manages shared
+  vocabulary/assignments (schema 4); note writes synchronize assignments while
+  preserving legacy import receipts. `http.ts`: loopback
   Host/Origin protections and bounded request reading.
 - `scripts/library-backup.mjs`: database-aware backup/restore;
   `prepare-pdfjs.mjs`: pinned local worker/resources; `start-standalone.mjs`:

@@ -280,7 +280,7 @@ warning but is not recovered after closing the tab. Missing/damaged files show
 a preview error; restore a verified backup for recovery. Deletion retains
 unreferenced asset bytes under the existing backup-safe retention policy.
 Full-library backups include images and their metadata. Schema 1 libraries
-migrate transactionally to schema 3 on first use; older backups remain restorable.
+migrate transactionally to schema 4 on first use; older backups remain restorable.
 
 On a saved note, choose **Manage linked images**, select an imported image and
 choose **Link image**. Image details show **Linked notes**, with controls to link
@@ -291,7 +291,7 @@ a note or image removes its links through SQLite foreign keys while keeping the
 other record. Stale link actions are rejected if either record changed.
 
 Full-library backup/restore includes references alongside image metadata and
-original bytes. Schema 2 image libraries migrate to schema 3 without changing
+original bytes. Schema 2 image libraries migrate to schema 4 without changing
 records or assets. There is no OCR, image AI, annotation or moodboard behavior.
 
 Image/link checks include all three raster formats, original-byte equality,
@@ -302,3 +302,45 @@ backup roundtrips. Production stop/start and serving a restored backup were also
 checked using an isolated temporary library with Mac Chrome desktop/mobile
 previews and direct-reference navigation. The real user library was not used
 for these checks. Safari and Docker runtime remain unverified.
+
+
+## Shared tags
+
+Open **Tags**, or choose **Manage shared tags** on a note, image detail or PDF.
+Choose **Edit tags**, type a label or select an autocomplete suggestion, and
+press Enter / **Add tag**. Remove individual labels with their named remove
+buttons, then **Save tags**. Pending input must be added or cleared before saving.
+Changes stay local. Unsaved tag edits have a navigation warning; save before
+closing the tab. Use **Cancel**, then **Reload tags** after a conflict.
+
+Filter by one or more tags, item type, and title/filename keywords. Every selected
+tag and keyword must match. **Clear filters** restores all items. Results link
+to their original note, image or PDF; this view does not search body/page text.
+Fonts are not included. Explicit note/image links remain independent.
+
+Labels are trimmed and compared using the same lowercase convention as note
+tags. Duplicate assignments collapse; the first saved spelling becomes the shared
+display label. Tag input is limited to 1,000 characters per item, including commas
+between labels. Empty labels and non-text values are rejected. Unused vocabulary
+stays available for reuse; there is no global rename, merge, hierarchy or deletion.
+The note editor keeps its comma-separated field for ordinary labels. Labels with
+literal commas are edited individually in **Shared tags** and survive body-only
+edits and saving a conflicting note as a copy.
+
+Schema 4 adds vocabulary and assignment tables transactionally on first library
+access. Existing note JSON, labels, revisions, original assets and legacy import
+receipts are preserved. Assignment keys deduplicate existing labels without
+losing their note associations. Repeated opens/imports do not duplicate tags or
+restore removed assignments. Old backups (schemas 1–3) still restore and then
+migrate on opening; schema 4 backups include tags. Newer schemas are rejected.
+Tag saves advance the item's revision, so stale note/image edits and PDF deletes
+cannot overwrite them. Deleting an item cascades only its assignments; removing
+a tag keeps the item and its explicit links.
+
+After updating, restart the app to load all new handlers (rebuild first for a
+production launch). Older app versions cannot open a schema 4 library. Shared-tag
+QA uses fresh temporary libraries and a separate checkout/build directory when
+a normal dev server is running. Coverage includes migration/legacy backup,
+normalization, repeated import, conflicts, deletion, keyboard/focus, combined
+filters, mobile layout and full-library backup roundtrip. Safari and Docker
+runtime remain unverified.
