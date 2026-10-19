@@ -1,7 +1,7 @@
 import 'server-only';
 import { importImage, changeImage } from './images';
 import { isDeepStrictEqual } from 'node:util';
-import { dataDirectory, digest, openLibrary, readAsset, storeAsset } from './database.mjs';
+import { dataDirectory, digest, openLibrary, setRecordTags, readAsset, storeAsset } from './database.mjs';
 import { validateNote, NoteConflictError } from '../note-model';
 import { validatePdf, PDF_LIMITS } from '../pdf-model';
 import { validateSavedFont } from '../font-model';
@@ -113,6 +113,7 @@ export async function mutate(kind: Kind, input: Record<string, unknown>) {
       } else if (current) return false;
       if (bytes) storeAsset(directory, id, bytes);
       db.prepare('INSERT INTO records(kind,id,data,asset) VALUES(?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data, asset=excluded.asset').run(kind, id, JSON.stringify(data), bytes ? id : row?.asset ?? null);
+      if (kind === 'notes') setRecordTags(db, kind, id, data.tags);
       if (action === 'import') {
         const saved = db.prepare('SELECT data,asset FROM records WHERE kind=? AND id=?').get(kind, id);
         if (!saved || !isDeepStrictEqual(JSON.parse(String(saved.data)), data)) throw new Error('Import verification failed.');

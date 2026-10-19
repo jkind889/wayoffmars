@@ -5,7 +5,7 @@ export type { Page };
 export function resetLibrary() {
   const directory = process.env.WAYOFFMARS_TEST_DATA_DIR;
   if (!directory?.startsWith('/tmp/wayoffmars-test-')) throw new Error('Tests require an isolated temporary library.');
-  execFileSync(process.execPath, ['--input-type=module', '-e', `import {openLibrary} from './src/lib/server/database.mjs'; const db=openLibrary(process.argv[1]); db.exec('DELETE FROM records; DELETE FROM imports;'); db.close();`, directory], { stdio: 'pipe' });
+  execFileSync(process.execPath, ['--input-type=module', '-e', `import {openLibrary} from './src/lib/server/database.mjs'; const db=openLibrary(process.argv[1]); db.exec('DELETE FROM records; DELETE FROM imports; DELETE FROM tags;'); db.close();`, directory], { stdio: 'pipe' });
 }
 export const test = base.extend<{ isolatedLibrary: void }>({
   isolatedLibrary: [async ({}, use) => { resetLibrary(); await use(); }, { auto: true }],

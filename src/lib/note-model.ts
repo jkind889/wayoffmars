@@ -1,3 +1,4 @@
+import { normalizeTags } from './tag-model.mjs';
 export const NOTE_LIMITS = { title: 200, body: 50000, tags: 1000, source: 2048 };
 export type NoteFields = { title: string; body: string; tags: string; source: string };
 export type SavedNote = {
@@ -31,9 +32,12 @@ export function validateNote(value: unknown): SavedNote {
   }
   return note;
 }
-export function makeNote(fields: NoteFields, id: string, original: SavedNote | null): SavedNote {
+export function makeNote(fields: NoteFields, id: string, original: SavedNote | null, sourceTags = original?.tags): SavedNote {
   if (!validFields(fields)) throw new Error("A note field exceeds its allowed length.");
-  const tags = [...new Map(fields.tags.split(",").map(tag => tag.trim()).filter(Boolean).map(tag => [tag.toLowerCase(), tag])).values()];
+  // Preserve literal comma labels (and historical spelling) on body-only edits.
+  const tags = sourceTags && fields.tags === sourceTags.join(",")
+    ? [...sourceTags]
+    : normalizeTags(fields.tags.split(",").map(tag => tag.trim()).filter(Boolean));
   return validateNote({ id, title: fields.title.trim(), body: fields.body.trim(), tags,
     source: fields.source.trim(), createdAt: original?.createdAt ?? Date.now(),
     updatedAt: Math.max(Date.now(), original?.createdAt ?? 0), revision: crypto.randomUUID() });

@@ -1,4 +1,5 @@
 // Node-only implementation shared by the server repository and backup CLI.
+import { tagKey } from '../tag-model.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, readFileSync, openSync, closeSync, writeFileSync, fsyncSync, renameSync, existsSync, unlinkSync } from 'node:fs';
 import { resolve, join } from 'node:path';
@@ -40,7 +41,7 @@ export function openLibrary(directory = dataDirectory()) {
     db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;');
     db.exec('BEGIN IMMEDIATE');
     const version = db.prepare('PRAGMA user_version').get().user_version;
-    if (version > 3) throw new Error('This library needs a newer app version. Update before opening it.');
+    if (version > 4) throw new Error('This library needs a newer app version. Update before opening it.');
     if (version === 0) db.exec(`
       CREATE TABLE records (kind TEXT NOT NULL CHECK(kind IN ('notes','pdfs','fonts')), id TEXT NOT NULL, data TEXT NOT NULL, asset TEXT, PRIMARY KEY(kind,id)) STRICT;
       CREATE TABLE imports (kind TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL, PRIMARY KEY(kind,id,fingerprint)) STRICT;
@@ -65,7 +66,40 @@ export function openLibrary(directory = dataDirectory()) {
       CREATE INDEX image_links_by_image ON image_links(image_id);
       PRAGMA user_version=3;
     `);
+    if (version < 4) {
+      db.exec(`
+        CREATE TABLE tags (key TEXT PRIMARY KEY, label TEXT NOT NULL) STRICT;
+        CREATE TABLE record_tags (
+          kind TEXT NOT NULL CHECK(kind IN ('notes','images','pdfs')),
+          record_id TEXT NOT NULL,
+          tag_key TEXT NOT NULL,
+          PRIMARY KEY(kind,record_id,tag_key),
+          FOREIGN KEY(kind,record_id) REFERENCES records(kind,id) ON DELETE CASCADE,
+          FOREIGN KEY(tag_key) REFERENCES tags(key)
+        ) STRICT;
+        CREATE INDEX record_tags_by_tag ON record_tags(tag_key);
+      `);
+      // Leave source JSON and import fingerprints untouched, including unreadable
+      // records. Recover all usable labels without rewriting historical notes.
+      for (const row of db.prepare("SELECT id,data FROM records WHERE kind='notes' ORDER BY id").all()) {
+        let note;
+        try { note = JSON.parse(row.data); } catch { continue; }
+        if (Array.isArray(note?.tags)) setRecordTags(db, 'notes', row.id, note.tags.filter(tag => typeof tag === 'string' && tag.trim()));
+      }
+      db.exec('PRAGMA user_version=4');
+    }
     db.exec('COMMIT');
     return db;
   } catch (error) { db.close(); throw error; }
+}
+
+// Call inside the record mutation's transaction. Vocabulary survives unlinking,
+// so an unused label remains available for reuse. First spelling wins globally.
+export function setRecordTags(db, kind, id, labels) {
+  db.prepare('DELETE FROM record_tags WHERE kind=? AND record_id=?').run(kind, id);
+  for (const label of labels) {
+    const key = tagKey(label);
+    db.prepare('INSERT INTO tags(key,label) VALUES(?,?) ON CONFLICT DO NOTHING').run(key, label.trim());
+    db.prepare('INSERT INTO record_tags VALUES(?,?,?) ON CONFLICT DO NOTHING').run(kind, id, key);
+  }
 }
