@@ -57,13 +57,18 @@ export function Collections() {
   const [reloadVersion, setReloadVersion] = useState(0);
   const lock = useRef(false), unsaved = useRef(false);
   useEffect(() => { let cancelled = false; localRequest<CollectionsLibrary>('collections').then(data => { if (!cancelled) setLibrary(data); }).catch(error => { if (!cancelled) setError(error.message); }).finally(() => { if (!cancelled) setBusy(false); }); return () => { cancelled = true; }; }, []);
+  useEffect(() => {
+    if (!name.trim()) return;
+    const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', guard); return () => window.removeEventListener('beforeunload', guard);
+  }, [name]);
   async function change(input: object) {
     if (lock.current) return;
     lock.current = true; setBusy(true); setError('');
     try {
       const result = await localRequest<Collection | null>('collections', input);
       setLibrary(previous => ({ ...previous, collections: result ? [...previous.collections.filter(c => c.id !== result.id), result] : previous.collections.filter(c => c.id !== selected) }));
-      if (result) { setSelected(result.id); setName(''); } else setSelected('');
+      if (result) { setSelected(result.id); if ('expectedRevision' in input && input.expectedRevision === null) setName(''); } else setSelected('');
       setStatus(result ? 'Collection saved on this Mac.' : 'Collection removed. Source items are kept.');
     } catch (error) { setError((error as Error).message); } finally { lock.current = false; setBusy(false); }
   }

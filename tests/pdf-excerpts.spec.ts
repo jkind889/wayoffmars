@@ -35,6 +35,14 @@ test('search excerpt creates a note; keyboard selection, draft recovery, existin
   const card = page.getByRole('article', { name: 'Source reading', exact: true });
   await expect(card.locator('blockquote')).toHaveText('Color and type');
   await expect(card.getByText('A useful contrast.')).toBeVisible();
+  await page.getByRole('button', { name: 'Edit Source reading', exact: true }).click();
+  await page.getByLabel('Body', { exact: true }).fill('A revised body.');
+  await page.getByRole('button', { name: 'Save note', exact: true }).click();
+  await expect(card.locator('blockquote')).toHaveText('Color and type');
+  await page.reload();
+  await page.getByLabel('Search notes and PDFs', { exact: true }).fill('useful contrast');
+  await expect(card).toBeVisible();
+  await page.getByRole('button', { name: 'Clear search' }).click();
   await card.getByRole('link', { name: 'Open cited page 1' }).click();
   await expect(page).toHaveURL(new RegExp(`/pdf/${pdf.id}\\?page=1`));
   await expect(page.getByRole('img', { name: 'Original PDF, physical page 1' })).toBeVisible();
@@ -44,6 +52,11 @@ test('search excerpt creates a note; keyboard selection, draft recovery, existin
   await expect(page.getByLabel('Quotation', { exact: true })).toHaveValue('Color and type');
   await expect(page.getByLabel('Quotation', { exact: true })).toBeFocused();
   await page.getByLabel('Add excerpt to').selectOption(note.id);
+  await page.screenshot({ path: '/tmp/wayoffmars-capture-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/wayoffmars-capture-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole('button', { name: 'Save excerpt to note' }).click();
   await page.getByRole('link', { name: 'Open Color study' }).click();
   await expect(page.getByRole('article', { name: 'Color study', exact: true }).locator('blockquote')).toHaveText('Color and type');
@@ -76,10 +89,9 @@ test('legacy text-only PDF capture survives missing originals and deleted source
   await expect(page.locator('blockquote')).toHaveText('and type');
   await page.getByLabel('Search notes and PDFs', { exact: true }).fill('and type');
   await expect(page.getByRole('article', { name: 'Color study', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Clear search' }).click();
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Remove excerpt', exact: true }).click();
-  await expect(page.getByRole('article', { name: 'Color study', exact: true })).toBeFocused();
+  await expect(page.getByLabel('Search notes and PDFs', { exact: true })).toBeFocused();
 });
 
 test('schema5 migration and backups preserve citations, observations and foreign keys', async ({ request }) => {

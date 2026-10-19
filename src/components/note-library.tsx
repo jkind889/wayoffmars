@@ -33,6 +33,7 @@ export function NoteLibrary() {
   const lock = useRef(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const restoreFocus = useRef(false);
+  const excerptFocus = useRef<string | null>(null);
   const newRef = useRef<HTMLButtonElement>(null);
   const dirty = dirtyDraft(draft);
   const terms = useMemo(() => searchTerms(query), [query]);
@@ -83,6 +84,14 @@ export function NoteLibrary() {
   useEffect(() => {
     if (restoreFocus.current && !busy) { newRef.current?.focus(); restoreFocus.current = false; }
   });
+
+  useEffect(() => {
+    const id = excerptFocus.current;
+    if (id !== null) {
+      (document.getElementById(`note-${encodeURIComponent(id)}`) ?? searchRef.current)?.focus();
+      excerptFocus.current = null;
+    }
+  }, [notes]);
 
   function keepDraft(next: Draft | null) {
     setDraft(next);
@@ -168,7 +177,7 @@ export function NoteLibrary() {
           <div className="note-snippets">{snippets.map((snippet, index) => <p key={index}><HighlightedText text={snippet} terms={terms} /></p>)}</div>
           <details className="note-full-text"><summary>Read full note</summary><p className="note-body"><HighlightedText text={note.body} terms={terms} /></p></details>
         </> : <p className="note-body">{note.body}</p>}
-        <NoteExcerpts note={note} disabled={busy} onChanged={updated => setNotes(previous => sortNotes(previous.map(item => item.id === updated.id ? updated : item)))} />
+        <NoteExcerpts note={note} disabled={busy} onChanged={updated => { excerptFocus.current = updated.id; setNotes(previous => sortNotes(previous.map(item => item.id === updated.id ? updated : item))); }} />
         {note.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul>}
         {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
         <p><a href={`/tags?kind=notes&id=${encodeURIComponent(note.id)}`}>Manage shared tags</a></p>

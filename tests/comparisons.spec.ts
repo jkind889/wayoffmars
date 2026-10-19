@@ -20,6 +20,7 @@ test('image shortlist survives filtering, limits to four and handles deletion wi
   const dialog = page.getByRole('dialog', { name: 'Compare images' });
   await expect(dialog.getByText('Image no longer available')).toBeVisible();
   await expect(dialog.getByRole('img')).toHaveCount(3);
+  await expect.poll(() => dialog.getByRole('img').evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
   await page.screenshot({ path: '/tmp/wayoffmars-compare-desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -43,6 +44,17 @@ test('font comparisons use shared specimen appearance and detect deleted saved f
   await dialog.getByLabel('Alignment', { exact: true }).selectOption('center');
   await expect(dialog.locator('.font-sample')).toHaveCount(2);
   await expect(dialog.locator('.font-sample').first()).toHaveCSS('text-align', 'center');
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('DOM.enable'); await cdp.send('CSS.enable');
+  const { root } = await cdp.send('DOM.getDocument');
+  const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: root.nodeId, selector: '.comparison-dialog .font-sample' });
+  const rendered = await cdp.send('CSS.getPlatformFontsForNode', { nodeId });
+  expect(rendered.fonts.some(font => font.isCustomFont && font.glyphCount > 0)).toBe(true);
+  await cdp.detach();
+  await page.screenshot({ path: '/tmp/wayoffmars-font-compare-desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/wayoffmars-font-compare-mobile.png' });
   await page.keyboard.press('Escape');
   await expect(page.getByLabel('Preview text')).toHaveValue('A shared specimen');
   const fonts = await (await request.get('/api/library?kind=fonts')).json();

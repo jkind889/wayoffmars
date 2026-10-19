@@ -44,8 +44,11 @@ test('collections create, reorder, remove membership and navigate on desktop/mob
     await page.getByRole('button', { name: 'Add to collection' }).click();
     await expect(page.getByRole('heading', { name: 'Type project' })).toBeFocused();
   }
+  await page.getByLabel('New collection name').fill('Next project draft');
   await page.getByRole('button', { name: 'Move Design.pdf up' }).focus(); await page.keyboard.press('Enter');
   await expect(page.getByRole('article').nth(1)).toHaveAttribute('aria-label', 'Design.pdf');
+  await expect(page.getByLabel('New collection name')).toHaveValue('Next project draft');
+  await page.getByLabel('New collection name').fill('');
   await page.getByRole('button', { name: 'Remove Palette.png from collection' }).click();
   await expect(page.getByRole('article')).toHaveCount(3);
   await expect(page.locator('.font-sample')).toBeVisible();

@@ -15,7 +15,7 @@ export function NoteExcerpts({ note, onChanged, disabled }: { note: SavedNote; o
       <button className="secondary-button" disabled={disabled || busy} onClick={async () => {
         if (lock.current || !window.confirm('Remove this excerpt and its observation from the note? The PDF is kept.')) return;
         lock.current = true; setBusy(true); setError('');
-        try { onChanged(await localRequest<SavedNote>('excerpts', { action: 'delete', id: excerpt.id, noteId: note.id, noteRevision: note.revision })); requestAnimationFrame(() => document.getElementById(`note-${encodeURIComponent(note.id)}`)?.focus()); }
+        try { onChanged(await localRequest<SavedNote>('excerpts', { action: 'delete', id: excerpt.id, noteId: note.id, noteRevision: note.revision })); }
         catch (error) { setError((error as Error).message); } finally { lock.current = false; setBusy(false); }
       }}>Remove excerpt</button>
     </article>)}
