@@ -108,7 +108,7 @@ export function NoteLibrary() {
     if (!validateSource(draft.fields.source.trim())) { setError("Use a complete http:// or https:// source URL, or leave it empty."); return; }
     lock.current = true; setBusy(true); setError(""); setStatus("");
     try {
-      const note = makeNote(draft.fields, asCopy ? crypto.randomUUID() : draft.id, asCopy ? null : draft.original);
+      const note = makeNote(draft.fields, asCopy ? crypto.randomUUID() : draft.id, asCopy ? null : draft.original, draft.original?.tags);
       await writeNote(note, note.id, asCopy ? null : draft.original?.revision ?? null);
       setNotes(previous => sortNotes([...previous.filter(entry => entry.id !== note.id), note]));
       keepDraft(null); setConflict(false); setStatus(`“${note.title}” saved on this Mac.`); restoreFocus.current = true;
@@ -141,7 +141,8 @@ export function NoteLibrary() {
       <fieldset disabled={busy}>
         <label>Title<input ref={titleRef} required maxLength={NOTE_LIMITS.title} value={draft.fields.title} onChange={event => keepDraft({ ...draft, fields: { ...draft.fields, title: event.target.value } })} /></label>
         <div className="note-field"><label htmlFor="note-body">Body</label><textarea id="note-body" required rows={8} maxLength={NOTE_LIMITS.body} value={draft.fields.body} onChange={event => keepDraft({ ...draft, fields: { ...draft.fields, body: event.target.value } })} /></div>
-        <label>Tags <span className="field-hint">Optional, separated by commas</span><input maxLength={NOTE_LIMITS.tags} value={draft.fields.tags} onChange={event => keepDraft({ ...draft, fields: { ...draft.fields, tags: event.target.value } })} /></label>
+        <label>Tags <span className="field-hint">Optional, separated by commas</span><input disabled={draft.original?.tags.some(tag => tag.includes(","))} maxLength={NOTE_LIMITS.tags} value={draft.fields.tags} onChange={event => keepDraft({ ...draft, fields: { ...draft.fields, tags: event.target.value } })} /></label>
+        {draft.original?.tags.some(tag => tag.includes(",")) && <p className="storage-note">These tags include a literal comma. Use <a href={`/tags?kind=notes&id=${encodeURIComponent(draft.id)}`}>Shared tags</a> to edit them individually.</p>}
         <label>Source URL <span className="field-hint">Optional</span><input type="url" maxLength={NOTE_LIMITS.source} placeholder="https://" value={draft.fields.source} onChange={event => keepDraft({ ...draft, fields: { ...draft.fields, source: event.target.value } })} /></label>
         <div className="backup-actions"><button className="primary-button" type="submit">{busy ? "Saving…" : "Save note"}</button>
           {conflict && <button className="secondary-button" type="button" onClick={event => void save(event, true)}>Save as new note</button>}
@@ -168,6 +169,7 @@ export function NoteLibrary() {
         </> : <p className="note-body">{note.body}</p>}
         {note.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul>}
         {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
+        <p><a href={`/tags?kind=notes&id=${encodeURIComponent(note.id)}`}>Manage shared tags</a></p>
         <ImageNoteLinks key={`${note.id}:${note.revision}`} kind="notes" id={note.id} disabled={busy} />
       </article></li>)}</ul>}
     </section>

@@ -82,6 +82,7 @@ export function ImageLibrary() {
         <label>Why saved <span className="field-hint">Optional short description</span><textarea rows={3} maxLength={IMAGE_LIMITS.description} value={fields.description} onChange={event => setFields({ ...fields, description: event.target.value })} /></label>
         <div className="backup-actions"><button className="primary-button" type="submit">{busy ? 'Saving…' : 'Save image details'}</button><button className="secondary-button" type="button" onClick={() => void remove()}>Delete image</button></div>
       </fieldset><p className="storage-note">{dirty ? 'Unsaved edits. Save before closing this tab.' : 'Details are saved on this Mac.'}</p></form>
+      <p><a href={`/tags?kind=images&id=${encodeURIComponent(selected.id)}`}>Manage shared tags</a></p>
       <ImageNoteLinks key={`${selected.id}:${selected.revision}`} kind="images" id={selected.id} disabled={busy} />
     </section>}
     <div className="library-heading"><h2>Saved images</h2><span className="library-count">{images.length} images</span></div>

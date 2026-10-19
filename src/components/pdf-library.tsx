@@ -128,6 +128,7 @@ export function PdfLibrary({ query }: { query: string }) {
           <button type="button" className="secondary-button" disabled={busy} onClick={() => void remove(pdf)} aria-label={`Delete PDF ${pdf.filename}`}>Delete</button></div>
         <p className="storage-note">{pdf.pages.length} pages · Saved on this Mac{pdf.pages.some(page => !page.text) ? ` · ${pdf.pages.filter(page => !page.text).length} page(s) without searchable text` : ""}</p>
         <p className="storage-note">{pdf.hasOriginal ? "Original PDF retained." : "Text only — reattach the original to open cited pages."}</p>
+        <p><a href={`/tags?kind=pdfs&id=${encodeURIComponent(pdf.id)}`}>Manage shared tags</a></p>
         <ReattachPdf pdf={pdf} onAttached={() => { setStatus('Original attached and checksum verified.'); setPdfs(previous => previous.map(entry => entry.id === pdf.id ? { ...entry, hasOriginal: true } : entry)); }} />
         {searching && matches.filter(match => match.pdf.id === pdf.id).map(match => <div className="pdf-page-result" key={match.page}>
           <h4>Page {match.page}</h4>
