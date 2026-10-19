@@ -14,6 +14,6 @@ export default defineConfig({
     command: "npm run dev -- --port 3107",
     url: "http://127.0.0.1:3107",
     reuseExistingServer: false,
-    env: { WAYOFFMARS_DATA_DIR: process.env.WAYOFFMARS_TEST_DATA_DIR },
+    env: { WAYOFFMARS_CHECK_BUILD: "1", WAYOFFMARS_DATA_DIR: process.env.WAYOFFMARS_TEST_DATA_DIR },
   },
 });
