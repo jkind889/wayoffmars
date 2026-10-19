@@ -16,7 +16,7 @@ export function readTagLibrary(): TagLibrary {
       let data;
       try { data = JSON.parse(String(row.data)); } catch { return []; }
       if (!data || typeof data.revision !== 'string' || typeof (data.title ?? data.filename) !== 'string') return [];
-      return [{ kind: row.kind, id: row.id, title: data.title ?? data.filename, revision: data.revision, tags: assignments(db, String(row.kind), String(row.id)) } as TaggedRecord];
+      return [{ kind: row.kind, id: row.id, title: data.title ?? data.filename, revision: data.revision, addedAt: data.createdAt ?? data.importedAt ?? 0, tags: assignments(db, String(row.kind), String(row.id)) } as TaggedRecord];
     });
     db.exec('COMMIT');
     return { vocabulary, records };
@@ -36,7 +36,7 @@ export function changeTags(input: Record<string, unknown>): TaggedRecord {
     if (input.kind !== 'pdfs') data.updatedAt = Math.max(Date.now(), current.updatedAt, current.createdAt);
     setRecordTags(db, input.kind, input.id, labels);
     db.prepare('UPDATE records SET data=? WHERE kind=? AND id=?').run(JSON.stringify(data), input.kind, input.id);
-    const result = { kind: input.kind as TaggedRecord['kind'], id: input.id, title: data.title ?? data.filename, revision: data.revision, tags: assignments(db, input.kind, input.id) };
+    const result = { kind: input.kind as TaggedRecord['kind'], id: input.id, title: data.title ?? data.filename, revision: data.revision, addedAt: data.createdAt ?? data.importedAt ?? 0, tags: assignments(db, input.kind, input.id) };
     db.exec('COMMIT');
     return result;
   } finally { db.close(); }

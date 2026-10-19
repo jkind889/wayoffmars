@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { note, library, seed, assign } from './helpers/tags';
+import { note, library, seed, assign, post } from './helpers/tags';
 
 test('keyboard tag editing, autocomplete, combined filters and mobile layout', async ({ page, request }) => {
   await seed(request);
@@ -129,4 +129,29 @@ test('body-only note edits preserve literal comma labels from shared tags', asyn
   await page.getByRole('button', { name: 'Save note', exact: true }).click();
   await expect(page.getByRole('status').first()).toContainText('saved on this Mac');
   expect((await library(request)).records.find(r => r.kind === 'notes')!.tags.map(t => t.label)).toEqual(['Color', 'Design, Type']);
+});
+
+test('untagged and recently added mixed views preserve original dates and autocomplete filters', async ({ page, request }) => {
+  await seed(request);
+  await page.goto('/tags?view=untagged');
+  await expect(page.getByText('2 of 3 items')).toBeVisible();
+  await page.getByLabel('Item type').selectOption('pdfs');
+  await expect(page.getByText('1 of 3 items')).toBeVisible();
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await page.getByLabel('Library view').selectOption('recent');
+  await expect(page.getByRole('article').first()).toHaveAttribute('aria-label', 'Palette.png');
+  const current = (await library(request)).records.find(r => r.kind === 'notes')!;
+  await assign(request, current, ['Design']);
+  await page.getByRole('button', { name: 'Reload tags' }).click();
+  await expect(page.getByRole('article').first()).toHaveAttribute('aria-label', 'Palette.png');
+  await page.getByLabel('Filter by tag', { exact: true }).fill('design');
+  await page.getByLabel('Filter by tag', { exact: true }).press('Enter');
+  await expect(page.getByText('1 of 3 items')).toBeVisible();
+  await expect(page.getByRole('article')).toHaveAttribute('aria-label', 'Color study');
+});
+
+ test('mixed views tolerate historical out-of-range dates', async ({ page, request }) => {
+  expect((await post(request, 'notes', { action: 'import', record: { ...note, createdAt: 1e16, updatedAt: 1e16 } })).ok()).toBe(true);
+  await page.goto('/tags');
+  await expect(page.getByText('Date unavailable', { exact: false })).toBeVisible();
 });
