@@ -191,7 +191,7 @@ text/image PDFs keep physical page offsets. Extraction order and font mappings
 may affect search; there is no OCR.
 
 Combined search remains browser-side over saved records. All literal keywords
-must match within a note's title/body/tags or one PDF page plus its filename.
+must match within a note's title/body/tags/quotations/observations or one PDF page plus its filename.
 Physical page numbers include blanks and ignore printed/roman labels. Notes rank
 title matches above tags/body; PDFs rank filename matches above text, with recency
 and stable IDs as tie breakers. Snippets are highlighted; PDF results cap at 100
@@ -280,7 +280,7 @@ warning but is not recovered after closing the tab. Missing/damaged files show
 a preview error; restore a verified backup for recovery. Deletion retains
 unreferenced asset bytes under the existing backup-safe retention policy.
 Full-library backups include images and their metadata. Schema 1 libraries
-migrate transactionally to schema 4 on first use; older backups remain restorable.
+migrate transactionally to schema 6 on first use; older backups remain restorable.
 
 On a saved note, choose **Manage linked images**, select an imported image and
 choose **Link image**. Image details show **Linked notes**, with controls to link
@@ -291,7 +291,7 @@ a note or image removes its links through SQLite foreign keys while keeping the
 other record. Stale link actions are rejected if either record changed.
 
 Full-library backup/restore includes references alongside image metadata and
-original bytes. Schema 2 image libraries migrate to schema 4 without changing
+original bytes. Schema 2 image libraries migrate to schema 6 without changing
 records or assets. There is no OCR, image AI, annotation or moodboard behavior.
 
 Image/link checks include all three raster formats, original-byte equality,
@@ -338,9 +338,82 @@ cannot overwrite them. Deleting an item cascades only its assignments; removing
 a tag keeps the item and its explicit links.
 
 After updating, restart the app to load all new handlers (rebuild first for a
-production launch). Older app versions cannot open a schema 4 library. Shared-tag
-QA uses fresh temporary libraries and a separate checkout/build directory when
-a normal dev server is running. Coverage includes migration/legacy backup,
+production launch). Older app versions cannot open a schema 6 library. Shared-tag
+QA uses fresh temporary libraries and a separate `.next-check` build directory, preserving the normal
+dev server. Coverage includes migration/legacy backup,
 normalization, repeated import, conflicts, deletion, keyboard/focus, combined
 filters, mobile layout and full-library backup roundtrip. Safari and Docker
 runtime remain unverified.
+
+
+## Mixed library views and comparisons
+
+In **Tags**, choose **Untagged** to find notes, images and PDFs without tag
+assignments, or **Recently added** to sort newest first. Note/image creation dates
+and PDF import dates are preserved; editing tags does not move an item to the
+front. Type filters, title search and every-selected-tag filtering work together.
+**Filter by tag** uses the same autocomplete as tag editing. Fonts remain untagged
+and outside this mixed view.
+
+In **Fonts** or **Images**, shortlist 2–4 items and choose **Compare**. Shortlists
+survive title filtering within the page. Comparisons use a two-column layout on
+desktop and stack on narrow screens. Escape or **Close comparison** returns to
+browsing. Missing/deleted items are reported when comparison opens. Font text,
+size, tracking, line height, alignment and colors stay synchronized with the main
+specimens. Installed fonts require the existing explicit permission and preview
+steps; **Shortlist installed font** keeps a temporary decoded copy without saving
+it. Clear/removal releases that copy. Shortlists reset when leaving the page.
+
+## Project collections
+
+Open **Collections**, name a project, then add existing notes, images, PDFs or
+saved fonts. Type/title filters narrow the candidate list. Membership changes and
+**Move up/down** save immediately; they also save any edited collection name.
+Previews and source links use existing records and assets, without binary copies.
+The limit is 100 collections, each containing up to 100 distinct items.
+
+Removing membership or deleting a collection keeps all source items. Deleting a
+source removes its memberships and changes affected collection revisions; use
+**Reload collections** to see external changes or recover from a stale edit.
+Name edits have navigation protection but are not recovered after closing the
+tab. Schema 5 adds ordered, foreign-key-backed references transactionally.
+
+## PDF excerpts in notes
+
+Choose **Read pages and capture excerpts** on a PDF, **Capture excerpt from page**
+on a search result, or **Open cited page** on a saved excerpt. In the page viewer,
+select a passage in **Extracted page text** and choose **Capture selected text**.
+Keyboard selection works too. The quotation can be shortened or replaced with a
+continuous passage from that page. Whitespace is normalized; the server verifies
+it against saved extracted text. Add an optional **Observation**, choose a new or
+existing note, then **Save excerpt to note**.
+
+Quotation, observation, original PDF identity, filename and physical page are
+stored separately from the note body. Note search includes quotations and
+observations. Existing note bodies/tags remain intact. Adding/removing an excerpt
+advances the note revision, protecting unfinished note edits in other tabs.
+Conflicts keep the excerpt draft; **Reload note choices** refreshes revisions
+without discarding it. One unfinished excerpt is recovered in the current tab on
+refresh. Save before closing the tab. Limits: 10,000 quotation characters,
+5,000 observation characters and 100 excerpts per note.
+
+Text-only legacy PDFs can supply excerpts; attach their original to view the
+physical page. Missing/damaged original files do not prevent capture from saved
+text. Deleting a PDF keeps its saved quotations, observations and citation
+metadata, with an explicit source-deleted message. Reimporting that PDF does not
+automatically reconnect historical excerpts. Deleting a note deletes its excerpt
+records. **Remove excerpt** removes its observation too, while keeping the PDF.
+There is no OCR, page annotation or automatic URL fetching.
+
+Schema 6 adds excerpts transactionally. Schemas 1–5 and their backups remain
+readable and migrate on opening; future schemas are rejected. Full-library
+backup/restore includes ordered collections and excerpt relationships and verifies
+foreign keys, checksums and original assets. Fonts JSON export remains fonts-only.
+Restart the app after updating; rebuild first for production. No manual migration
+or import is needed. To return to an older app version, restore a verified
+full-library backup made before the upgrade into a new library directory.
+
+The regression suite uses installed Mac Chrome and isolated temporary libraries.
+`WAYOFFMARS_CHECK_BUILD=1 npm run build` uses `.next-check` without replacing a
+normal dev build. The production launcher still uses the ordinary `.next` build.
+Safari and Docker runtime have not been verified for these additions.

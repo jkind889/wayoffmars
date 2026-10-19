@@ -13,8 +13,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 wayoffmars is a single-user, Mac-local library for fonts, images, design notes
 and PDFs.
 There are no accounts, cloud uploads or hosted services. Preserve the user's
-favicon and unrelated working-tree edits. Images and explicit image/note
-references and shared tags across notes, images and PDFs are implemented.
+favicon and unrelated working-tree edits. Images, image/note references, shared
+tags and mixed views for notes/images/PDFs, font/image comparisons, ordered
+project collections and cited PDF excerpts are implemented.
 OCR, annotation, moodboards, font tagging and image AI are outside that scope.
 
 ## Code map
@@ -28,8 +29,10 @@ OCR, annotation, moodboards, font tagging and image AI are outside that scope.
   `images.ts`: raster validation/metadata; `image-links.ts`: revision-checked
   references backed by cascading SQLite foreign keys. `tags.ts` manages shared
   vocabulary/assignments (schema 4); note writes synchronize assignments while
-  preserving legacy import receipts. `http.ts`: loopback
-  Host/Origin protections and bounded request reading.
+  preserving legacy import receipts. `collections.ts` manages ordered references
+  (schema 5); `excerpts.ts` validates PDF quotations and revision-checked note
+  attachments (schema 6), retaining citation snapshots after source deletion.
+  `http.ts`: loopback Host/Origin protections and bounded request reading.
 - `scripts/library-backup.mjs`: database-aware backup/restore;
   `prepare-pdfjs.mjs`: pinned local worker/resources; `start-standalone.mjs`:
   production launcher. `tests/`: Playwright tests with synthetic/local fixtures.
@@ -48,6 +51,8 @@ Native dev/start bind to loopback. Default persistent data is
 Never use, modify or import the real user library for tests. Playwright creates
 `/tmp/wayoffmars-test-*`, uses port 3107 and refuses reuse of a running server.
 Use explicit fresh temporary data paths for ad hoc tests and CLI checks too.
+Test builds use `.next-check` to coexist with the normal dev server;
+`WAYOFFMARS_CHECK_BUILD=1 npm run build` isolates a production check too.
 Stop test servers afterward; never leave a test override as the normal app.
 
 Docker uses `/data` and a persistent named volume, separate from native storage.
