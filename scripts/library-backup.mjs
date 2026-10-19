@@ -21,7 +21,8 @@ try {
   await backup(db, join(staging, 'library.sqlite')); db.close(); db = undefined;
   const snapshot = new DatabaseSync(join(staging, 'library.sqlite'), { readOnly: true });
   try {
-    if (snapshot.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || snapshot.prepare('PRAGMA user_version').get().user_version !== 1) throw new Error('Database integrity or version check failed.');
+    if (snapshot.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || ![1, 2].includes(snapshot.prepare('PRAGMA user_version').get().user_version)) throw new Error('Database integrity or version check failed.');
+    if (snapshot.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Database references are invalid.');
     const assets = snapshot.prepare('SELECT DISTINCT asset FROM records WHERE asset IS NOT NULL').all();
     for (const { asset } of assets) storeAsset(staging, asset, readAsset(source, asset));
     writeFileSync(join(staging, 'manifest.json'), JSON.stringify({ format: 'wayoffmars-library', version: 1, createdAt: new Date().toISOString(), databaseSha256: digest(readFileSync(join(staging, 'library.sqlite'))), assets: assets.length }, null, 2), { mode: 0o600 });

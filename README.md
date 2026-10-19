@@ -1,6 +1,6 @@
 # wayoffmars
 
-A local Mac library for fonts, design notes and searchable PDF text. No accounts,
+A local Mac library for fonts, images, design notes and searchable PDF text. No accounts,
 remote uploads, hosted database, synchronization or deployment.
 
 ## Run locally
@@ -238,3 +238,20 @@ legacy/mismatched/repeated attachment, missing files, cancellation, invalid page
 checksum/revision rejection, inactive embedded scripts/links, and original bytes
 in verified backups. Mac Chrome desktop/mobile viewport checks are automated;
 Safari and Docker runtime are not verified here.
+
+## Image references
+
+Open **Images**, choose **Import image**, then open a gallery item to edit its
+title, HTTP(S) source URL and short why-saved description. Source URLs are stored
+without fetching. Still PNG, JPEG and WebP are supported up to 20 MiB, 12,000
+pixels on either side and 24 megapixels. Animated images, SVG/HTML and malformed
+files are rejected by signature checking and a full server-side Sharp decode.
+Original bytes are preserved and deduplicated by SHA-256 even after renaming.
+
+Metadata saves and confirmed deletion check the current revision; stale edits
+require copying your draft and reloading. Unsaved metadata has a navigation
+warning but is not recovered after closing the tab. Missing/damaged files show
+a preview error; restore a verified backup for recovery. Deletion retains
+unreferenced asset bytes under the existing backup-safe retention policy.
+Full-library backups include images and their metadata. Schema 1 libraries
+migrate transactionally to schema 2 on first use; older backups remain restorable.

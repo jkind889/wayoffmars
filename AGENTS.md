@@ -10,10 +10,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Project and scope
 
-wayoffmars is a single-user, Mac-local library for fonts, design notes and PDFs.
+wayoffmars is a single-user, Mac-local library for fonts, images, design notes and PDFs.
 There are no accounts, cloud uploads or hosted services. Preserve the user's
-favicon and unrelated working-tree edits. Images and direct image/note references
-are planned work; do not describe them as implemented until their slices land.
+favicon and unrelated working-tree edits. Images are implemented; direct image/note references remain planned until their
+slice lands.
 OCR, annotation, moodboards, shared tags and image AI are outside that scope.
 
 ## Code map

@@ -29,7 +29,7 @@ export function LocalLibrary() {
   }
   return <section className="note-library" aria-label="Local library storage">
     <h1>Local library</h1>
-    <p>Notes, searchable PDF text and fonts now live on this Mac in SQLite and a local asset folder. Nothing is sent to an external service.</p>
+    <p>Images, notes, searchable PDF text and fonts live on this Mac in SQLite and a local asset folder. Nothing is sent to an external service.</p>
     <h2>Import your browser library</h2>
     <p>Use the same browser profile and address where you saved your library. This copies records and font bytes only when you choose Import. Existing text-only PDFs remain searchable. Your IndexedDB data is never deleted or edited.</p>
     <p>Each record is validated and verified after writing. You can stop and repeat the import. Already imported records are skipped, even if you later edited or deleted them here. Conflicting records are skipped: keep the SQLite version, or copy the browser note manually as a new note. No automatic overwrite.</p>

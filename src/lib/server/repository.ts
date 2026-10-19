@@ -1,13 +1,14 @@
 import 'server-only';
+import { importImage, changeImage } from './images';
 import { isDeepStrictEqual } from 'node:util';
 import { dataDirectory, digest, openLibrary, readAsset, storeAsset } from './database.mjs';
 import { validateNote, NoteConflictError } from '../note-model';
 import { validatePdf, PDF_LIMITS } from '../pdf-model';
 import { validateSavedFont } from '../font-model';
 
-export type Kind = 'notes' | 'pdfs' | 'fonts';
+export type Kind = 'notes' | 'pdfs' | 'fonts' | 'images';
 export function kindOf(value: unknown): Kind {
-  if (value !== 'notes' && value !== 'pdfs' && value !== 'fonts') throw new Error('Invalid library kind.');
+  if (value !== 'notes' && value !== 'pdfs' && value !== 'fonts' && value !== 'images') throw new Error('Invalid library kind.');
   return value;
 }
 const identity = (id: unknown): string => {
@@ -77,6 +78,7 @@ async function validated(kind: Kind, value: unknown) {
   return { data, bytes };
 }
 export async function mutate(kind: Kind, input: Record<string, unknown>) {
+  if (kind === 'images') return input.action === 'save' ? importImage(input) : changeImage(input);
   const action = input.action;
   if (kind === 'pdfs' && action === 'attach') {
     const id = identity(input.id);

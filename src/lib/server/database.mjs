@@ -38,12 +38,21 @@ export function openLibrary(directory = dataDirectory()) {
   const db = new DatabaseSync(join(directory, 'library.sqlite'), { timeout: 5000 });
   try {
     db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;');
+    db.exec('BEGIN IMMEDIATE');
     const version = db.prepare('PRAGMA user_version').get().user_version;
-    if (version > 1) throw new Error('This library needs a newer app version. Update before opening it.');
-    db.exec(`BEGIN IMMEDIATE;
-      CREATE TABLE IF NOT EXISTS records (kind TEXT NOT NULL CHECK(kind IN ('notes','pdfs','fonts')), id TEXT NOT NULL, data TEXT NOT NULL, asset TEXT, PRIMARY KEY(kind,id)) STRICT;
-      CREATE TABLE IF NOT EXISTS imports (kind TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL, PRIMARY KEY(kind,id,fingerprint)) STRICT;
-      PRAGMA user_version=1; COMMIT;`);
+    if (version > 2) throw new Error('This library needs a newer app version. Update before opening it.');
+    if (version === 0) db.exec(`
+      CREATE TABLE records (kind TEXT NOT NULL CHECK(kind IN ('notes','pdfs','fonts')), id TEXT NOT NULL, data TEXT NOT NULL, asset TEXT, PRIMARY KEY(kind,id)) STRICT;
+      CREATE TABLE imports (kind TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL, PRIMARY KEY(kind,id,fingerprint)) STRICT;
+    `);
+    if (version < 2) db.exec(`
+      CREATE TABLE records_v2 (kind TEXT NOT NULL CHECK(kind IN ('notes','pdfs','fonts','images')), id TEXT NOT NULL, data TEXT NOT NULL, asset TEXT, PRIMARY KEY(kind,id)) STRICT;
+      INSERT INTO records_v2 SELECT * FROM records;
+      DROP TABLE records;
+      ALTER TABLE records_v2 RENAME TO records;
+      PRAGMA user_version=2;
+    `);
+    db.exec('COMMIT');
     return db;
   } catch (error) { db.close(); throw error; }
 }
