@@ -197,6 +197,12 @@ title matches above tags/body; PDFs rank filename matches above text, with recen
 and stable IDs as tie breakers. Snippets are highlighted; PDF results cap at 100
 matching pages with total count. Search preserves note drafts.
 
+Notes display 25 results per page. Previous/Next and the page selector keep every
+result reachable; search still covers all saved notes. Direct note links open the
+correct page, and page changes keep unfinished drafts. Full-body search highlights
+are created when **Read full note** opens. Browser Find sees only the rendered
+page; use the app search to find notes elsewhere in the library.
+
 ## Checks
 
 ```sh
@@ -273,6 +279,20 @@ without fetching. Still PNG, JPEG and WebP are supported up to 20 MiB, 12,000
 pixels on either side and 24 megapixels. Animated images, SVG/HTML and malformed
 files are rejected by signature checking and a full server-side Sharp decode.
 Original bytes are preserved and deduplicated by SHA-256 even after renaming.
+
+Gallery, linked-image and collection previews use local WebP thumbnails up to
+640×440 pixels, loaded near the viewport. Orientation and transparency are
+preserved; images are not enlarged. Detail and comparison views use the originals.
+Existing images acquire thumbnails on demand without reimporting or migrating.
+
+Thumbnails are disposable server-memory entries, capped at 64 previews / 16 MiB,
+with at most two conversions at once. Restart or eviction regenerates them on the
+next request, so first viewing can spend time converting images. Every request
+checks the current original's existence and checksum, including cache hits; a
+cached preview cannot hide a missing, damaged or deleted source. Failed previews
+can be retried, and the original remains available through image details when
+healthy. No thumbnails are written to the library or included in backups: restore
+keeps the original assets and regenerates previews as needed.
 
 Metadata saves and confirmed deletion check the current revision; stale edits
 require copying your draft and reloading. Unsaved metadata has a navigation

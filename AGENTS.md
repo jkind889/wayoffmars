@@ -26,7 +26,8 @@ OCR, annotation, moodboards, font tagging and image AI are outside that scope.
   `local-client.ts`: same-origin API clients. Search runs in the browser.
 - `src/lib/server/repository.ts`: validated mutations and revision checks;
   `database.mjs`: SQLite, migrations and content-addressed immutable assets.
-  `images.ts`: raster validation/metadata; `image-links.ts`: revision-checked
+  `images.ts`: raster validation/metadata; `image-thumbnails.ts`: disposable,
+  bounded preview cache with source verification; `image-links.ts`: revision-checked
   references backed by cascading SQLite foreign keys. `tags.ts` manages shared
   vocabulary/assignments (schema 4); note writes synchronize assignments while
   preserving legacy import receipts. `collections.ts` manages ordered references
@@ -66,7 +67,8 @@ Update backup version acceptance with schema changes; test migration from the
 previous schema and backup roundtrip. SQLite foreign keys must be enabled on each
 connection. Keep transactions short and use revision checks for stale edits and
 deletes; never silently overwrite a newer record. Note drafts survive in tab
-session storage and have navigation protection.
+session storage and have navigation protection. Notes paginate rendering, not
+search coverage; preserve direct-link paging, keyboard focus and draft recovery.
 
 Validate content, identities, sizes and metadata on the server. Filenames must
 never become paths. Store/checksum/fsync immutable assets before committing their
