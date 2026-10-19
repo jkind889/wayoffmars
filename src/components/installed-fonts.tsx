@@ -22,16 +22,22 @@ export function InstalledFonts({ disabled, text, style, onSave }: {
   const face = useRef<FontFace | null>(null), generation = useRef(0), locked = useRef(false);
   const previewRegion = useRef<HTMLDivElement>(null);
   const picker = useRef<HTMLSelectElement>(null);
-  const browseButton = useRef<HTMLButtonElement>(null), requested = useRef(false);
+  const browseButton = useRef<HTMLButtonElement>(null);
+  const region = useRef<HTMLElement>(null);
+  const pendingFocus = useRef(false);
   useEffect(() => {
     return () => { generation.current += 1; if (face.current) document.fonts.delete(face.current); };
   }, []);
   useEffect(() => {
-    if (phase !== 'idle') return;
+    if (!pendingFocus.current || phase !== 'idle' || disabled) return;
+    pendingFocus.current = false;
+    // Restore the initiating workflow only if the user has not moved elsewhere.
+    const active = document.activeElement;
+    if (active && active !== document.body && !region.current?.contains(active)) return;
     if (preview) previewRegion.current?.focus();
     else if (inventory.length) picker.current?.focus();
-    else if (requested.current) browseButton.current?.focus();
-  }, [phase, preview, inventory]);
+    else browseButton.current?.focus();
+  }, [phase, preview, inventory, disabled]);
   const busy = disabled || phase !== 'idle';
   function clearPreview() {
     if (face.current) document.fonts.delete(face.current);
@@ -40,7 +46,7 @@ export function InstalledFonts({ disabled, text, style, onSave }: {
   async function browse() {
     if (disabled || locked.current) return;
     locked.current = true;
-    requested.current = true;
+    pendingFocus.current = true;
     const current = ++generation.current;
     setPhase('browsing'); setError(''); setStatus(''); setInventory([]); setSelection(''); clearPreview();
     try {
@@ -56,6 +62,7 @@ export function InstalledFonts({ disabled, text, style, onSave }: {
     const font = inventory[Number(selection)];
     if (!selection || !font || busy || locked.current) return;
     locked.current = true;
+    pendingFocus.current = true;
     const current = ++generation.current;
     setPhase('loading'); setError(''); setStatus(''); clearPreview();
     try {
@@ -72,6 +79,7 @@ export function InstalledFonts({ disabled, text, style, onSave }: {
   async function save() {
     if (!preview || busy || locked.current) return;
     locked.current = true;
+    pendingFocus.current = true;
     const current = generation.current;
     setPhase('saving'); setError(''); setStatus('');
     try {
@@ -80,7 +88,7 @@ export function InstalledFonts({ disabled, text, style, onSave }: {
     } catch (error) { if (current === generation.current) setError(`Font was not saved. ${localFontError(error)} Retry Save to library.`); }
     finally { if (current === generation.current) { locked.current = false; setPhase('idle'); } }
   }
-  return <section className="installed-fonts" aria-labelledby="installed-fonts-heading">
+  return <section ref={region} className="installed-fonts" aria-labelledby="installed-fonts-heading">
     <div className="library-heading"><h2 id="installed-fonts-heading">Installed on this Mac</h2>
       <button ref={browseButton} className="secondary-button" type="button" disabled={busy || Boolean(availability)} onClick={() => void browse()}>{phase === 'browsing' ? 'Requesting font access…' : 'Browse installed fonts'}</button>
     </div>
@@ -99,7 +107,7 @@ export function InstalledFonts({ disabled, text, style, onSave }: {
       <div className="font-row-heading"><h3>{preview.label}</h3><button className="secondary-button" type="button" disabled={busy} onClick={() => void save()}>Save to library</button></div>
       <p className="font-save-status">Installed font · temporary preview</p>
       <p className="font-sample" style={{ ...style, fontFamily: `"${preview.family}"` }}>{text || ' '}</p>
-      <button className="secondary-button" type="button" disabled={busy} onClick={() => { clearPreview(); setStatus('Installed preview cleared. Saved library copies are kept.'); }}>Clear installed preview</button>
+      <button className="secondary-button" type="button" disabled={busy} onClick={() => { pendingFocus.current = true; clearPreview(); setStatus('Installed preview cleared. Saved library copies are kept.'); }}>Clear installed preview</button>
     </div>}
   </section>;
 }

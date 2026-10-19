@@ -3,24 +3,26 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const fixture = path.join(__dirname, 'fixtures/fonts/SourceSerif4-Regular.ttf');
-type AccessState = { queries: number; reads: number; activated: boolean; error: string; missing: boolean; empty: boolean };
+type AccessState = { queries: number; reads: number; activated: boolean; error: string; missing: boolean; empty: boolean; release: null | (() => void) };
 type TestWindow = typeof window & { fontAccessTest: AccessState };
-async function mockFonts(page: Page, error = '') {
-  await page.addInitScript(({ bytes, error }) => {
-    const state = { queries: 0, reads: 0, activated: false, error, missing: false, empty: false };
+async function mockFonts(page: Page, error = '', hold: '' | 'query' | 'blob' = '') {
+  await page.addInitScript(({ bytes, error, hold }) => {
+    const state = { queries: 0, reads: 0, activated: false, error, missing: false, empty: false, release: null as null | (() => void) };
     Object.defineProperty(window, 'fontAccessTest', { value: state });
     Object.defineProperty(window, 'queryLocalFonts', { configurable: true, value: async () => {
       state.queries++; state.activated = navigator.userActivation.isActive;
       await new Promise(resolve => setTimeout(resolve, 40));
+      if (hold === 'query') await new Promise<void>(resolve => { state.release = resolve; });
       if (state.error) throw new DOMException('Fixture permission response', state.error);
       if (state.empty) return [];
       return ['SourceSerif4-Regular', 'Other-fixture'].map(name => ({ family: 'Source Serif 4', fullName: name, postscriptName: name, style: 'Regular', blob: async () => {
         state.reads++;
+        if (hold === 'blob') await new Promise<void>(resolve => { state.release = resolve; });
         if (state.missing) throw new DOMException('Fixture removed', 'NotFoundError');
         return new Blob([new Uint8Array(bytes)]);
       } }));
     } });
-  }, { bytes: [...readFileSync(fixture)], error });
+  }, { bytes: [...readFileSync(fixture)], error, hold });
 }
 async function ready(page: Page) {
   await page.goto('/');
@@ -179,4 +181,59 @@ test('appearance controls affect uploaded and installed specimens, reset and ref
   await page.reload();
   await expect(page.getByRole('slider', { name: /Preview size/ })).toHaveValue('32');
   expect(errors).toEqual([]);
+});
+
+for (const hold of ['query', 'blob'] as const) {
+  test(`delayed ${hold} completion does not steal focus from specimen editing`, async ({ page }) => {
+    await mockFonts(page, '', hold); await ready(page);
+    await page.getByRole('button', { name: 'Browse installed fonts', exact: true }).click();
+    if (hold === 'blob') {
+      await page.getByLabel('Installed font', { exact: true }).selectOption('0');
+      await page.getByRole('button', { name: 'Preview installed font', exact: true }).click();
+    }
+    await expect.poll(() => page.evaluate(() => Boolean((window as TestWindow).fontAccessTest.release))).toBe(true);
+    const text = page.getByRole('textbox', { name: 'Preview text', exact: true });
+    await text.fill('Keep typing here');
+    await page.evaluate(() => (window as TestWindow).fontAccessTest.release!());
+    if (hold === 'query') await expect(page.getByLabel('Installed font', { exact: true })).toBeEnabled();
+    else await expect(page.locator('.installed-font-preview')).toBeVisible();
+    await expect(text).toBeFocused();
+  });
+}
+
+test('installed font focus waits for an overlapping file import to finish', async ({ page }) => {
+  await mockFonts(page, '', 'query'); await ready(page);
+  let releaseSave!: () => void;
+  const saveGate = new Promise<void>(resolve => { releaseSave = resolve; });
+  let saving = false;
+  await page.route('**/api/library?kind=fonts', async route => {
+    if (route.request().method() === 'POST') { saving = true; await saveGate; }
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'Browse installed fonts', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Boolean((window as TestWindow).fontAccessTest.release))).toBe(true);
+  await page.getByLabel('Choose font files', { exact: true }).setInputFiles(fixture);
+  await expect.poll(() => saving).toBe(true);
+  await page.evaluate(() => (window as TestWindow).fontAccessTest.release!());
+  const picker = page.getByLabel('Installed font', { exact: true });
+  await expect(picker).toBeVisible(); await expect(picker).toBeDisabled();
+  releaseSave();
+  await expect(picker).toBeEnabled(); await expect(picker).toBeFocused();
+});
+
+test('shared form boundaries remain distinguishable on both app surfaces', async ({ page }) => {
+  await ready(page);
+  const contrast = await page.getByRole('textbox', { name: 'Preview text', exact: true }).evaluate(element => {
+    const css = getComputedStyle(element);
+    const luminance = (color: string) => color.match(/\d+/g)!.slice(0, 3).map(Number).map(value => {
+      const channel = value / 255;
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+    const border = luminance(css.borderTopColor);
+    return [css.backgroundColor, getComputedStyle(document.body).backgroundColor].map(color => {
+      const surface = luminance(color);
+      return (Math.max(border, surface) + 0.05) / (Math.min(border, surface) + 0.05);
+    });
+  });
+  expect(Math.min(...contrast)).toBeGreaterThanOrEqual(3);
 });

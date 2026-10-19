@@ -5,6 +5,7 @@
   --text: #111;
   --muted: #595959;
   --border: #b8b8b8;
+  --control-border: #888;
   --rule: #111;
   --accent: #9e1515;
   --radius: 0;
@@ -42,7 +43,7 @@ code { padding: 2px 4px; background: var(--surface); font-size: .875em; overflow
 .primary-button, .secondary-button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; max-width: 100%; padding: 9px 14px; border: 1px solid var(--rule); cursor: pointer; font-size: 14px; line-height: 1.4; text-align: center; text-decoration: none; overflow-wrap: anywhere; }
 .primary-button { background: var(--text); color: #fff; }
 .primary-button:hover:enabled { background: #333; }
-.secondary-button { background: var(--background); color: var(--text); border-color: var(--border); }
+.secondary-button { background: var(--background); color: var(--text); border-color: var(--control-border); }
 .secondary-button:hover:enabled, a.secondary-button:hover { background: var(--surface); border-color: var(--rule); text-decoration: none; }
 .backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .storage-note, .field-hint, .font-save-status { color: var(--muted); font-size: 13px; line-height: 1.6; }
@@ -71,7 +72,7 @@ code { padding: 2px 4px; background: var(--surface); font-size: .875em; overflow
 .font-library > .library-heading { grid-column: 1 / -1; }
 .library-tools { align-self: start; display: grid; gap: 24px; min-width: 0; padding-right: 24px; border-right: 1px solid var(--border); }
 .preview-text, .preview-size { display: grid; gap: 8px; font-size: 13px; line-height: 1.5; }
-.preview-text textarea { width: 100%; min-height: 160px; resize: vertical; padding: 12px; border: 1px solid var(--border); background: var(--surface); font-size: 14px; line-height: 1.6; }
+.preview-text textarea { width: 100%; min-height: 160px; resize: vertical; padding: 12px; border: 1px solid var(--control-border); background: var(--surface); font-size: 14px; line-height: 1.6; }
 .preview-size input { width: 100%; margin: 0; }
 .font-list { min-width: 0; padding: 0; margin: 0; list-style: none; }
 .font-row { padding-block: 24px 32px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
@@ -91,12 +92,12 @@ code { padding: 2px 4px; background: var(--surface); font-size: .875em; overflow
 .note-editor fieldset { border: 0; padding: 0; margin: 24px 0; display: grid; gap: 20px; min-width: 0; }
 .note-editor .note-field, .note-editor label { display: grid; gap: 8px; }
 .note-editor label { font-size: 14px; font-weight: 600; }
-.note-editor input, .note-editor textarea { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); font-size: 16px; font-weight: 400; line-height: 1.6; }
+.note-editor input, .note-editor textarea { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--control-border); font-size: 16px; font-weight: 400; line-height: 1.6; }
 .note-editor textarea { resize: vertical; }
 .note-search { margin: 24px 0 32px; padding-block: 24px; border-block: 1px solid var(--rule); display: grid; gap: 12px; }
 .note-search label { font-size: 13px; font-weight: 600; }
 .search-controls { display: flex; gap: 8px; }
-.search-controls input { flex: 1; min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--border); font-size: 16px; line-height: 1.5; }
+.search-controls input { flex: 1; min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--control-border); font-size: 16px; line-height: 1.5; }
 .search-controls button { flex-shrink: 0; }
 .note-list { list-style: none; padding: 0; margin: 16px 0 24px; }
 .note-card { border-top: 1px solid var(--border); padding-block: 24px; overflow-wrap: anywhere; }
@@ -127,7 +128,7 @@ summary { width: fit-content; padding-block: 10px; cursor: pointer; font-size: 1
 .pdf-navigation { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-block: 16px; border-block: 1px solid var(--rule); }
 .pdf-navigation form { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .pdf-navigation label { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-.pdf-navigation input { width: 80px; min-height: 40px; padding: 8px; border: 1px solid var(--border); }
+.pdf-navigation input { width: 80px; min-height: 40px; padding: 8px; border: 1px solid var(--control-border); }
 .pdf-canvas-host { max-width: 980px; margin: 24px auto; padding: 24px; background: var(--surface); }
 .pdf-canvas-host:empty { display: none; }
 .pdf-canvas { display: block; width: 100%; height: auto; border: 1px solid var(--border); background: white; }
@@ -162,7 +163,7 @@ summary { width: fit-content; padding-block: 10px; cursor: pointer; font-size: 1
 .linked-records .image-preview { min-height: 120px; }
 .link-form { margin: 20px 0; display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
 .link-form label { display: grid; gap: 8px; min-width: 0; max-width: 100%; font-size: 14px; }
-.link-form select { max-width: 100%; min-height: 40px; padding: 9px; border: 1px solid var(--border); font-size: 14px; }
+.link-form select { max-width: 100%; min-height: 40px; padding: 9px; border: 1px solid var(--control-border); font-size: 14px; }
 .note-card:target { scroll-margin-top: 20px; border-color: var(--accent); }
 
 /* Local-library instructions remain complete and easy to read. */
@@ -222,7 +223,7 @@ summary { width: fit-content; padding-block: 10px; cursor: pointer; font-size: 1
 .font-appearance { display: grid; gap: 16px; min-width: 0; margin: 0; padding: 16px 0 0; border: 0; border-top: 1px solid var(--border); }
 .font-appearance legend { padding: 0 8px 0 0; font-size: 13px; font-weight: 600; }
 .font-appearance label, .installed-font-picker label { display: grid; gap: 8px; min-width: 0; font-size: 13px; }
-.font-appearance input, .font-appearance select, .installed-font-picker select { width: 100%; min-width: 0; min-height: 40px; padding: 8px; border: 1px solid var(--border); font-size: 16px; }
+.font-appearance input, .font-appearance select, .installed-font-picker select { width: 100%; min-width: 0; min-height: 40px; padding: 8px; border: 1px solid var(--control-border); font-size: 16px; }
 .font-appearance .preview-color { grid-template-columns: 1fr 48px; align-items: center; }
 .preview-color input { padding: 4px; }
 .preview-color span { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
