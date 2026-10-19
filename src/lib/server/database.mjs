@@ -41,7 +41,7 @@ export function openLibrary(directory = dataDirectory()) {
     db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;');
     db.exec('BEGIN IMMEDIATE');
     const version = db.prepare('PRAGMA user_version').get().user_version;
-    if (version > 4) throw new Error('This library needs a newer app version. Update before opening it.');
+    if (version > 5) throw new Error('This library needs a newer app version. Update before opening it.');
     if (version === 0) db.exec(`
       CREATE TABLE records (kind TEXT NOT NULL CHECK(kind IN ('notes','pdfs','fonts')), id TEXT NOT NULL, data TEXT NOT NULL, asset TEXT, PRIMARY KEY(kind,id)) STRICT;
       CREATE TABLE imports (kind TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL, PRIMARY KEY(kind,id,fingerprint)) STRICT;
@@ -88,6 +88,20 @@ export function openLibrary(directory = dataDirectory()) {
       }
       db.exec('PRAGMA user_version=4');
     }
+    if (version < 5) db.exec(`
+      CREATE TABLE collections (id TEXT PRIMARY KEY, name TEXT NOT NULL, revision TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL) STRICT;
+      CREATE TABLE collection_members (
+        collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL, record_id TEXT NOT NULL, position INTEGER NOT NULL CHECK(position>=0),
+        PRIMARY KEY(collection_id,kind,record_id), UNIQUE(collection_id,position),
+        FOREIGN KEY(kind,record_id) REFERENCES records(kind,id) ON DELETE CASCADE
+      ) STRICT;
+      CREATE INDEX collection_members_by_record ON collection_members(kind,record_id);
+      CREATE TRIGGER collection_member_removed AFTER DELETE ON collection_members BEGIN
+        UPDATE collections SET revision=lower(hex(randomblob(16))), updatedAt=max(updatedAt,unixepoch()*1000) WHERE id=OLD.collection_id;
+      END;
+      PRAGMA user_version=5;
+    `);
     db.exec('COMMIT');
     return db;
   } catch (error) { db.close(); throw error; }

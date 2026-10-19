@@ -101,6 +101,7 @@ export function FontLibrary() {
     };
   }, []);
 
+  useEffect(() => { if (!isRestoring && window.location.hash.startsWith('#font-')) document.getElementById(window.location.hash.slice(1))?.scrollIntoView(); }, [isRestoring]);
   const readyCount = fonts.filter((font) => font.status === "ready").length;
   const loadingCount = fonts.filter((font) => font.status === "loading").length;
   const errorCount = fonts.filter((font) => font.status === "error").length;
@@ -345,7 +346,7 @@ export function FontLibrary() {
         ) : (
           <ul className="font-list" aria-label="Selected fonts">
             {fonts.filter(font => font.name.toLowerCase().includes(query.trim().toLowerCase())).map((font) => (
-              <li key={font.id} className="font-row" aria-busy={font.status === "loading"}>
+              <li key={font.id} id={`font-${font.id}`} className="font-row" aria-busy={font.status === "loading"}>
                 <div className="font-row-heading">
                   <h3>{font.name}</h3>
                   {font.status === "ready" ? <button type="button" className="secondary-button" disabled={disabled} aria-label={`Remove ${font.name}`} onClick={() => void removeFont(font)}>Remove</button> : null}

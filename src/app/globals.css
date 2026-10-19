@@ -273,3 +273,6 @@ summary { width: fit-content; padding-block: 10px; cursor: pointer; font-size: 1
 .comparison-card .font-sample { overflow-wrap: anywhere; }
 .comparison-dialog textarea { width: 100%; }
 @media (max-width: 600px) { .comparison-grid { grid-template-columns: minmax(0, 1fr); } .comparison-dialog { padding: .75rem; } }
+.collections-workspace > label { display: grid; gap: .5rem; margin: 1rem 0; }
+.collections-workspace select { width: 100%; min-width: 0; padding: .65rem; font: inherit; background: white; color: #111; border: 1px solid #777; }
+.collections-workspace fieldset { min-width: 0; }
