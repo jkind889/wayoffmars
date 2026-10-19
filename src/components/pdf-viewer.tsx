@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PDFDocumentLoadingTask, PDFWorker, RenderTask } from 'pdfjs-dist/types/src/display/api';
 import { localRequest } from '@/lib/local-client';
 import { PDF_LIMITS, validatePdf, type SavedPdf } from '@/lib/pdf-model';
+import { PdfExcerptCapture } from './pdf-excerpt-capture';
 import { ReattachPdf } from './reattach-pdf';
 
 /** Canvas-only PDF.js: no scripting manager, forms, annotations, links or embedded HTML. */
@@ -81,6 +82,7 @@ export function PdfViewer({ id, initialPage: page }: { id: string; initialPage: 
       </nav>}
       <p role="status">{rendered ? `Showing physical page ${page} of ${pdf?.pages.length}.` : error ? 'Page could not be opened. Searchable text is still in Notes.' : `Opening physical page ${page}…`}</p>
       {error && <><p role="alert" className="font-error">{error}</p><button className="secondary-button" onClick={reload}>Retry opening page</button>{pdf && <ReattachPdf pdf={pdf} onAttached={reload} />}</>}
+      {pdf && page <= pdf.pages.length && <PdfExcerptCapture key={`${pdf.id}:${page}`} pdf={pdf} page={page} />}
       <div ref={canvasHost} className="pdf-canvas-host" />
       {rendered && <details className="pdf-page-text"><summary>Text from this original page</summary><p className="pdf-original-text">{text || 'This page has no selectable text.'}</p></details>}
     </>}

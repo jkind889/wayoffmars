@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { EMPTY_NOTE, NOTE_LIMITS, NoteConflictError, makeNote, noteFields, noteStorageError, readNotes, validFields, validateNote, validateSource, writeNote, type NoteFields, type SavedNote } from "@/lib/note-storage";
 
+import { NoteExcerpts } from "./note-excerpts";
 import { ImageNoteLinks } from './image-note-links';
 import { PdfLibrary } from "./pdf-library";
 
@@ -110,7 +111,7 @@ export function NoteLibrary() {
     try {
       const note = makeNote(draft.fields, asCopy ? crypto.randomUUID() : draft.id, asCopy ? null : draft.original, draft.original?.tags);
       await writeNote(note, note.id, asCopy ? null : draft.original?.revision ?? null);
-      setNotes(previous => sortNotes([...previous.filter(entry => entry.id !== note.id), note]));
+      setNotes(previous => sortNotes([...previous.filter(entry => entry.id !== note.id), { ...note, excerpts: asCopy ? [] : draft.original?.excerpts }]));
       keepDraft(null); setConflict(false); setStatus(`“${note.title}” saved on this Mac.`); restoreFocus.current = true;
     } catch (error) { setError(`Note could not be saved. ${noteStorageError(error)}`); setConflict(error instanceof NoteConflictError); }
     finally { lock.current = false; setBusy(false); }
@@ -154,12 +155,12 @@ export function NoteLibrary() {
       <label htmlFor="note-search">Search notes and PDFs</label>
       <div className="search-controls"><input ref={searchRef} id="note-search" type="search" maxLength={200} value={query} placeholder="Try typography, color, or a phrase" aria-describedby="note-search-help" onChange={event => setQuery(event.target.value)} />
         {query && <button className="secondary-button" type="button" onClick={clearSearch}>Clear search</button>}</div>
-      <p className="storage-note" id="note-search-help">Search note titles, bodies, and tags, plus PDF filenames and page text. Every keyword must match within one note or PDF page; capitalization does not matter.</p>
+      <p className="storage-note" id="note-search-help">Search note titles, bodies, tags, quotations and observations, plus PDF filenames and page text. Every keyword must match within one note or PDF page; capitalization does not matter.</p>
     </div>
     <div className="library-heading"><h2>{searching ? "Note results" : "Saved notes"}</h2><span className="library-count" aria-live="polite">{searching ? `${results.length} of ${notes.length} notes` : `${notes.length} ${notes.length === 1 ? "note" : "notes"}`}</span></div>
     {loading ? <p className="storage-note">Loading your notes…</p> : notes.length === 0 ? <div className="empty-state"><h3>{readError ? "Your notes could not all be loaded" : "Room for your next idea"}</h3><p>{readError ? "Your stored data has been kept. You can still write a new note." : "Write your first note about type, color, layout, or anything that inspires you."}</p></div> :
       results.length === 0 ? <div className="empty-state"><h3>No notes found</h3><p>Try fewer keywords or a different word from your notes.</p><button className="secondary-button" type="button" onClick={clearSearch}>Show all notes</button></div> :
-      <ul className="note-list">{results.map(({ note, snippets }) => <li key={note.id}><article id={`note-${encodeURIComponent(note.id)}`} className="note-card" aria-label={note.title}>
+      <ul className="note-list">{results.map(({ note, snippets }) => <li key={note.id}><article id={`note-${encodeURIComponent(note.id)}`} className="note-card" tabIndex={-1} aria-label={note.title}>
         <div className="note-card-heading"><h3><HighlightedText text={note.title} terms={terms} /></h3><div className="backup-actions">
           <button className="secondary-button" disabled={busy} onClick={() => edit(note)} aria-label={`Edit ${note.title}`}>Edit</button>
           <button className="secondary-button" disabled={busy} onClick={() => void remove(note)} aria-label={`Delete ${note.title}`}>Delete</button></div></div>
@@ -167,6 +168,7 @@ export function NoteLibrary() {
           <div className="note-snippets">{snippets.map((snippet, index) => <p key={index}><HighlightedText text={snippet} terms={terms} /></p>)}</div>
           <details className="note-full-text"><summary>Read full note</summary><p className="note-body"><HighlightedText text={note.body} terms={terms} /></p></details>
         </> : <p className="note-body">{note.body}</p>}
+        <NoteExcerpts note={note} disabled={busy} onChanged={updated => setNotes(previous => sortNotes(previous.map(item => item.id === updated.id ? updated : item)))} />
         {note.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul>}
         {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
         <p><a href={`/tags?kind=notes&id=${encodeURIComponent(note.id)}`}>Manage shared tags</a></p>

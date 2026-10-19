@@ -21,7 +21,7 @@ try {
   await backup(db, join(staging, 'library.sqlite')); db.close(); db = undefined;
   const snapshot = new DatabaseSync(join(staging, 'library.sqlite'), { readOnly: true });
   try {
-    if (snapshot.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || ![1, 2, 3, 4, 5].includes(snapshot.prepare('PRAGMA user_version').get().user_version)) throw new Error('Database integrity or version check failed.');
+    if (snapshot.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok' || ![1, 2, 3, 4, 5, 6].includes(snapshot.prepare('PRAGMA user_version').get().user_version)) throw new Error('Database integrity or version check failed.');
     if (snapshot.prepare('PRAGMA foreign_key_check').all().length) throw new Error('Database references are invalid.');
     const assets = snapshot.prepare('SELECT DISTINCT asset FROM records WHERE asset IS NOT NULL').all();
     for (const { asset } of assets) storeAsset(staging, asset, readAsset(source, asset));

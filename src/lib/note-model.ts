@@ -1,7 +1,9 @@
+import type { PdfExcerpt } from './excerpt-model';
 import { normalizeTags } from './tag-model.mjs';
 export const NOTE_LIMITS = { title: 200, body: 50000, tags: 1000, source: 2048 };
 export type NoteFields = { title: string; body: string; tags: string; source: string };
 export type SavedNote = {
+  excerpts?: PdfExcerpt[];
   id: string; title: string; body: string; tags: string[]; source: string;
   createdAt: number; updatedAt: number; revision: string;
 };

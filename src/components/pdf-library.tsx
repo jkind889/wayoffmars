@@ -128,11 +128,13 @@ export function PdfLibrary({ query }: { query: string }) {
           <button type="button" className="secondary-button" disabled={busy} onClick={() => void remove(pdf)} aria-label={`Delete PDF ${pdf.filename}`}>Delete</button></div>
         <p className="storage-note">{pdf.pages.length} pages · Saved on this Mac{pdf.pages.some(page => !page.text) ? ` · ${pdf.pages.filter(page => !page.text).length} page(s) without searchable text` : ""}</p>
         <p className="storage-note">{pdf.hasOriginal ? "Original PDF retained." : "Text only — reattach the original to open cited pages."}</p>
+        <p><a href={`/pdf/${pdf.id}?page=1`}>Read pages and capture excerpts</a></p>
         <p><a href={`/tags?kind=pdfs&id=${encodeURIComponent(pdf.id)}`}>Manage shared tags</a></p>
         <ReattachPdf pdf={pdf} onAttached={() => { setStatus('Original attached and checksum verified.'); setPdfs(previous => previous.map(entry => entry.id === pdf.id ? { ...entry, hasOriginal: true } : entry)); }} />
         {searching && matches.filter(match => match.pdf.id === pdf.id).map(match => <div className="pdf-page-result" key={match.page}>
           <h4>Page {match.page}</h4>
           {pdf.hasOriginal && <a className="secondary-button" href={`/pdf/${pdf.id}?page=${match.page}`} target="_blank" rel="noopener noreferrer">Open page {match.page}</a>}
+          <p><a href={`/pdf/${pdf.id}?page=${match.page}&quote=${encodeURIComponent(match.snippets[0] || "")}`}>Capture excerpt from page {match.page}</a></p>
           <div className="note-snippets">{match.snippets.map((snippet, index) => <p key={index}><Highlight text={snippet} terms={terms} /></p>)}</div>
         </div>)}
       </article>

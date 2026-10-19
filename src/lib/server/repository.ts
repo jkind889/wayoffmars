@@ -1,3 +1,4 @@
+import { excerptsForNote } from './excerpts';
 import 'server-only';
 import { importImage, changeImage } from './images';
 import { isDeepStrictEqual } from 'node:util';
@@ -21,7 +22,14 @@ function using<T>(fn: (db: ReturnType<typeof openLibrary>, directory: string) =>
   try { return fn(db, directory); } finally { db.close(); }
 }
 export function list(kind: Kind): unknown[] {
-  return using(db => db.prepare('SELECT data,asset FROM records WHERE kind=? ORDER BY id').all(kind).map(row => ({ ...JSON.parse(String(row.data)), ...(kind === 'pdfs' ? { hasOriginal: !!row.asset } : {}) })));
+  return using(db => {
+    db.exec('BEGIN');
+    const result = db.prepare('SELECT id,data,asset FROM records WHERE kind=? ORDER BY id').all(kind).map(row => {
+      const excerpts = kind === 'notes' ? excerptsForNote(db, String(row.id)) : [];
+      return { ...JSON.parse(String(row.data)), ...(kind === 'pdfs' ? { hasOriginal: !!row.asset } : excerpts.length ? { excerpts } : {}) };
+    });
+    db.exec('COMMIT'); return result;
+  });
 }
 export function pdfRecord(id: string) {
   return using(db => {

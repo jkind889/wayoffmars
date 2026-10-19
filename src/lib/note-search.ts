@@ -66,16 +66,17 @@ export function searchNotes(notes: SavedNote[], query: string): NoteResult[] {
   const exactTitle = phrase ? new RegExp(`^${escapePattern(phrase)}$`, "iu") : null;
   const results: NoteResult[] = [];
   for (const note of notes) {
+    const searchableText = [note.body, ...(note.excerpts ?? []).flatMap(excerpt => [excerpt.quotation, excerpt.observation, excerpt.filename])].join('\n');
     let score = 0;
     let matches = true;
     for (const pattern of patterns) {
       const title = pattern.test(note.title);
       const tag = note.tags.some(value => pattern.test(value));
-      const body = pattern.test(note.body);
+      const body = pattern.test(searchableText);
       if (!title && !tag && !body) { matches = false; break; }
       score += title ? 10 : tag ? 5 : 1;
     }
-    if (matches) results.push({ note, score: score + (exactTitle?.test(note.title) ? 100 : 0), snippets: terms.length ? matchingSnippets(note.body, terms) : [] });
+    if (matches) results.push({ note, score: score + (exactTitle?.test(note.title) ? 100 : 0), snippets: terms.length ? matchingSnippets(searchableText, terms) : [] });
   }
   return results.sort((a, b) => b.score - a.score || b.note.updatedAt - a.note.updatedAt || (a.note.id < b.note.id ? -1 : a.note.id > b.note.id ? 1 : 0));
 }

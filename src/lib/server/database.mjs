@@ -41,7 +41,7 @@ export function openLibrary(directory = dataDirectory()) {
     db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;');
     db.exec('BEGIN IMMEDIATE');
     const version = db.prepare('PRAGMA user_version').get().user_version;
-    if (version > 5) throw new Error('This library needs a newer app version. Update before opening it.');
+    if (version > 6) throw new Error('This library needs a newer app version. Update before opening it.');
     if (version === 0) db.exec(`
       CREATE TABLE records (kind TEXT NOT NULL CHECK(kind IN ('notes','pdfs','fonts')), id TEXT NOT NULL, data TEXT NOT NULL, asset TEXT, PRIMARY KEY(kind,id)) STRICT;
       CREATE TABLE imports (kind TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL, PRIMARY KEY(kind,id,fingerprint)) STRICT;
@@ -101,6 +101,20 @@ export function openLibrary(directory = dataDirectory()) {
         UPDATE collections SET revision=lower(hex(randomblob(16))), updatedAt=max(updatedAt,unixepoch()*1000) WHERE id=OLD.collection_id;
       END;
       PRAGMA user_version=5;
+    `);
+    if (version < 6) db.exec(`
+      CREATE TABLE pdf_excerpts (
+        id TEXT PRIMARY KEY,
+        note_kind TEXT NOT NULL DEFAULT 'notes' CHECK(note_kind='notes'), note_id TEXT NOT NULL,
+        source_kind TEXT DEFAULT 'pdfs' CHECK(source_kind='pdfs'), source_id TEXT,
+        original_id TEXT NOT NULL, filename TEXT NOT NULL, page INTEGER NOT NULL CHECK(page>0),
+        quotation TEXT NOT NULL, observation TEXT NOT NULL, createdAt INTEGER NOT NULL,
+        FOREIGN KEY(note_kind,note_id) REFERENCES records(kind,id) ON DELETE CASCADE,
+        FOREIGN KEY(source_kind,source_id) REFERENCES records(kind,id) ON DELETE SET NULL
+      ) STRICT;
+      CREATE INDEX pdf_excerpts_by_note ON pdf_excerpts(note_id);
+      CREATE INDEX pdf_excerpts_by_source ON pdf_excerpts(source_id);
+      PRAGMA user_version=6;
     `);
     db.exec('COMMIT');
     return db;

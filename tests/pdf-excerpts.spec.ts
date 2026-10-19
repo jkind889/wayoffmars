@@ -1,0 +1,94 @@
+import { test, expect } from './fixtures';
+import { seed, post, note } from './helpers/tags';
+import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+
+test('excerpts validate source pages and revisions and retain citation after PDF deletion', async ({ request }) => {
+  const { pdf } = await seed(request);
+  const input = { action: 'add', noteId: note.id, noteRevision: note.revision, pdfId: pdf.id, pdfRevision: pdf.revision, page: 1, quotation: 'Color and type', observation: '<script>my own reading</script>' };
+  for (const changes of [{ page: 0 }, { page: 2 }, { quotation: 'invented quotation' }, { quotation: 'a'.repeat(10001) }, { observation: 'x'.repeat(5001) }, { pdfRevision: 'stale' }]) expect((await post(request, 'excerpts', { ...input, ...changes })).status()).toBe(400);
+  expect((await request.post('/api/library?kind=excerpts', { data: input })).status()).toBe(403);
+  const saved = await (await post(request, 'excerpts', input)).json();
+  expect(saved.body).toBe(note.body); expect(saved.excerpts[0]).toMatchObject({ quotation: 'Color and type', observation: input.observation, filename: 'Design.pdf', page: 1, originalId: pdf.id });
+  expect((await post(request, 'excerpts', input)).status()).toBe(400);
+  expect((await post(request, 'notes', { action: 'write', id: note.id, expectedRevision: note.revision, note: { ...note, revision: randomUUID() } })).status()).toBe(400);
+  await post(request, 'pdfs', { action: 'delete', id: pdf.id, revision: pdf.revision });
+  const read = (await (await request.get('/api/library?kind=notes')).json())[0];
+  expect(read.excerpts[0]).toMatchObject({ sourceId: null, originalId: pdf.id, quotation: 'Color and type', observation: input.observation });
+  expect((await post(request, 'excerpts', { action: 'delete', id: saved.excerpts[0].id, noteId: note.id, noteRevision: note.revision })).status()).toBe(400);
+  const removed = await (await post(request, 'excerpts', { action: 'delete', id: saved.excerpts[0].id, noteId: note.id, noteRevision: saved.revision })).json();
+  expect(removed.excerpts).toEqual([]);
+});
+
+test('search excerpt creates a note; keyboard selection, draft recovery, existing notes and page navigation work', async ({ page, request }) => {
+  const { pdf } = await seed(request);
+  await page.goto('/notes'); await page.getByLabel('Search notes and PDFs', { exact: true }).fill('Color');
+  await page.getByRole('link', { name: 'Capture excerpt from page 1' }).click();
+  await expect(page.getByLabel('Quotation', { exact: true })).toHaveValue('Color and type');
+  await page.getByLabel('Observation', { exact: false }).fill('A useful contrast.');
+  page.once('dialog', dialog => dialog.accept()); await page.reload();
+  await expect(page.getByLabel('Observation', { exact: false })).toHaveValue('A useful contrast.');
+  await page.getByLabel('New note title').fill('Source reading');
+  await page.getByRole('button', { name: 'Save excerpt to note' }).click();
+  await page.getByRole('link', { name: 'Open Source reading' }).click();
+  const card = page.getByRole('article', { name: 'Source reading', exact: true });
+  await expect(card.locator('blockquote')).toHaveText('Color and type');
+  await expect(card.getByText('A useful contrast.')).toBeVisible();
+  await card.getByRole('link', { name: 'Open cited page 1' }).click();
+  await expect(page).toHaveURL(new RegExp(`/pdf/${pdf.id}\\?page=1`));
+  await expect(page.getByRole('img', { name: 'Original PDF, physical page 1' })).toBeVisible();
+  const text = page.getByLabel('Extracted page text', { exact: true });
+  await text.focus(); await text.press('Meta+a');
+  await page.getByRole('button', { name: 'Capture selected text' }).click();
+  await expect(page.getByLabel('Quotation', { exact: true })).toHaveValue('Color and type');
+  await expect(page.getByLabel('Quotation', { exact: true })).toBeFocused();
+  await page.getByLabel('Add excerpt to').selectOption(note.id);
+  await page.getByRole('button', { name: 'Save excerpt to note' }).click();
+  await page.getByRole('link', { name: 'Open Color study' }).click();
+  await expect(page.getByRole('article', { name: 'Color study', exact: true }).locator('blockquote')).toHaveText('Color and type');
+  await page.screenshot({ path: '/tmp/wayoffmars-excerpts-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/wayoffmars-excerpts-mobile.png', fullPage: true });
+});
+
+test('legacy text-only PDF capture survives missing originals and deleted sources', async ({ page, request }) => {
+  const { pdf } = await seed(request);
+  await post(request, 'pdfs', { action: 'delete', id: pdf.id, revision: pdf.revision });
+  await post(request, 'pdfs', { action: 'import', record: pdf });
+  await page.goto(`/pdf/${pdf.id}?page=1`);
+  await expect(page.getByText('No original is attached.', { exact: false })).toBeVisible();
+  await page.getByLabel('Quotation', { exact: true }).fill('and type');
+  await page.getByLabel('Add excerpt to').selectOption(note.id);
+  const current = (await (await request.get('/api/library?kind=notes')).json())[0];
+  await post(request, 'notes', { action: 'write', id: note.id, expectedRevision: current.revision, note: { ...current, revision: randomUUID(), body: 'Changed elsewhere' } });
+  await page.getByRole('button', { name: 'Save excerpt to note' }).click();
+  await expect(page.getByRole('region', { name: 'Capture PDF excerpt' }).getByRole('alert')).toContainText('changed or was deleted');
+  await expect(page.getByLabel('Quotation', { exact: true })).toHaveValue('and type');
+  await page.getByRole('button', { name: 'Reload note choices' }).click();
+  await page.getByRole('button', { name: 'Save excerpt to note' }).click();
+  await page.getByRole('link', { name: 'Open Color study' }).click();
+  await expect(page.getByText('Text only; the original', { exact: false })).toBeVisible();
+  await post(request, 'pdfs', { action: 'delete', id: pdf.id, revision: pdf.revision });
+  await page.reload();
+  await expect(page.getByText('Source PDF deleted.', { exact: false })).toBeVisible();
+  await expect(page.locator('blockquote')).toHaveText('and type');
+  await page.getByLabel('Search notes and PDFs', { exact: true }).fill('and type');
+  await expect(page.getByRole('article', { name: 'Color study', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Remove excerpt', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'Color study', exact: true })).toBeFocused();
+});
+
+test('schema5 migration and backups preserve citations, observations and foreign keys', async ({ request }) => {
+  const { pdf } = await seed(request), root = mkdtempSync('/tmp/wayoffmars-test-excerpts-');
+  const script = `import {openLibrary} from './src/lib/server/database.mjs';let db=openLibrary(process.argv[1]);db.exec("DROP TABLE pdf_excerpts;PRAGMA user_version=5;INSERT INTO records VALUES('notes','old','{}',NULL);INSERT INTO collections VALUES('legacy','Old collection','r',1,1);INSERT INTO collection_members VALUES('legacy','notes','old',0);");db.close();db=openLibrary(process.argv[1]);console.log(JSON.stringify([db.prepare('PRAGMA user_version').get().user_version,db.prepare('SELECT record_id FROM collection_members').get().record_id,db.prepare('PRAGMA foreign_key_check').all()]));db.close();`;
+  expect(JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', script, root + '/old'], { encoding: 'utf8' }))).toEqual([6, 'old', []]);
+  const saved = await (await post(request, 'excerpts', { action: 'add', noteId: note.id, noteRevision: note.revision, pdfId: pdf.id, pdfRevision: pdf.revision, page: 1, quotation: 'Color', observation: 'Personal observation' })).json();
+  execFileSync(process.execPath, ['scripts/library-backup.mjs', 'backup', root + '/backup'], { env: { ...process.env, WAYOFFMARS_DATA_DIR: process.env.WAYOFFMARS_TEST_DATA_DIR! } });
+  execFileSync(process.execPath, ['scripts/library-backup.mjs', 'restore', root + '/backup', root + '/restored']);
+  const result = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `import {openLibrary} from './src/lib/server/database.mjs';const db=openLibrary(process.argv[1]);const row=db.prepare('SELECT * FROM pdf_excerpts').get();db.prepare("DELETE FROM records WHERE kind='notes' AND id=?").run(row.note_id);console.log(JSON.stringify([row,db.prepare('SELECT COUNT(*) AS n FROM pdf_excerpts').get().n,db.prepare('PRAGMA foreign_key_check').all()]));db.close();`, root + '/restored'], { encoding: 'utf8' }));
+  expect(result[0]).toMatchObject({ id: saved.excerpts[0].id, quotation: 'Color', observation: 'Personal observation', original_id: pdf.id, page: 1 }); expect(result[1]).toBe(0); expect(result[2]).toEqual([]);
+});

@@ -1,3 +1,4 @@
+import { changeExcerpt } from '@/lib/server/excerpts';
 import { readCollections, changeCollection } from '@/lib/server/collections';
 import { readTagLibrary, changeTags } from '@/lib/server/tags';
 import { asset, pdfRecord, kindOf, list, mutate } from '@/lib/server/repository';
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   try { guard(request, true); } catch (error) { return response({ error: (error as Error).message }, 403); }
   try {
     const kind = new URL(request.url).searchParams.get('kind'), body = await readBody(request);
-    return response(kind === 'collections' ? changeCollection(body) : kind === 'tags' ? changeTags(body) : await mutate(kindOf(kind), body));
+    return response(kind === 'excerpts' ? changeExcerpt(body) : kind === 'collections' ? changeCollection(body) : kind === 'tags' ? changeTags(body) : await mutate(kindOf(kind), body));
   }
   catch (error) { return response({ error: error instanceof Error ? error.message : 'Local library could not be saved.' }, 400); }
 }
