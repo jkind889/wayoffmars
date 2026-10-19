@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { EMPTY_NOTE, NOTE_LIMITS, NoteConflictError, makeNote, noteFields, noteStorageError, readNotes, validFields, validateNote, validateSource, writeNote, type NoteFields, type SavedNote } from "@/lib/note-storage";
 
+import { ImageNoteLinks } from './image-note-links';
 import { PdfLibrary } from "./pdf-library";
 
 import { highlightText, searchNotes, searchTerms } from "@/lib/note-search";
@@ -65,6 +66,10 @@ export function NoteLibrary() {
     void restore();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!loading && window.location.hash.startsWith('#note-')) document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
+  }, [loading]);
 
   useEffect(() => {
     if (!dirty && !busy) return;
@@ -153,7 +158,7 @@ export function NoteLibrary() {
     <div className="library-heading"><h2>{searching ? "Note results" : "Saved notes"}</h2><span className="library-count" aria-live="polite">{searching ? `${results.length} of ${notes.length} notes` : `${notes.length} ${notes.length === 1 ? "note" : "notes"}`}</span></div>
     {loading ? <p className="storage-note">Loading your notes…</p> : notes.length === 0 ? <div className="empty-state"><h3>{readError ? "Your notes could not all be loaded" : "Room for your next idea"}</h3><p>{readError ? "Your stored data has been kept. You can still write a new note." : "Write your first note about type, color, layout, or anything that inspires you."}</p></div> :
       results.length === 0 ? <div className="empty-state"><h3>No notes found</h3><p>Try fewer keywords or a different word from your notes.</p><button className="secondary-button" type="button" onClick={clearSearch}>Show all notes</button></div> :
-      <ul className="note-list">{results.map(({ note, snippets }) => <li key={note.id}><article className="note-card" aria-label={note.title}>
+      <ul className="note-list">{results.map(({ note, snippets }) => <li key={note.id}><article id={`note-${encodeURIComponent(note.id)}`} className="note-card" aria-label={note.title}>
         <div className="note-card-heading"><h3><HighlightedText text={note.title} terms={terms} /></h3><div className="backup-actions">
           <button className="secondary-button" disabled={busy} onClick={() => edit(note)} aria-label={`Edit ${note.title}`}>Edit</button>
           <button className="secondary-button" disabled={busy} onClick={() => void remove(note)} aria-label={`Delete ${note.title}`}>Delete</button></div></div>
@@ -163,6 +168,7 @@ export function NoteLibrary() {
         </> : <p className="note-body">{note.body}</p>}
         {note.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul>}
         {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
+        <ImageNoteLinks key={`${note.id}:${note.revision}`} kind="notes" id={note.id} disabled={busy} />
       </article></li>)}</ul>}
     </section>
     <PdfLibrary query={query} />

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { IMAGE_LIMITS, imageFields, type SavedImage, type ImageFields } from '@/lib/image-model';
 import { localRequest, encodeBytes } from '@/lib/local-client';
+import { ImageNoteLinks } from './image-note-links';
 import { ImagePreview } from './image-preview';
 const fieldsOf = (image: SavedImage): ImageFields => ({ title: image.title, source: image.source, description: image.description });
 export function ImageLibrary() {
@@ -81,6 +82,7 @@ export function ImageLibrary() {
         <label>Why saved <span className="field-hint">Optional short description</span><textarea rows={3} maxLength={IMAGE_LIMITS.description} value={fields.description} onChange={event => setFields({ ...fields, description: event.target.value })} /></label>
         <div className="backup-actions"><button className="primary-button" type="submit">{busy ? 'Saving…' : 'Save image details'}</button><button className="secondary-button" type="button" onClick={() => void remove()}>Delete image</button></div>
       </fieldset><p className="storage-note">{dirty ? 'Unsaved edits. Save before closing this tab.' : 'Details are saved on this Mac.'}</p></form>
+      <ImageNoteLinks key={`${selected.id}:${selected.revision}`} kind="images" id={selected.id} disabled={busy} />
     </section>}
     <div className="library-heading"><h2>Saved images</h2><span className="library-count">{images.length} images</span></div>
     {loading ? <p role="status">Loading your images…</p> : !images.length ? <p className="empty-state">Import your first image reference.</p> : <ul className="image-gallery">{[...images].sort((a,b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id)).map(image => <li key={image.id}>

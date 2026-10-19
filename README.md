@@ -254,4 +254,25 @@ warning but is not recovered after closing the tab. Missing/damaged files show
 a preview error; restore a verified backup for recovery. Deletion retains
 unreferenced asset bytes under the existing backup-safe retention policy.
 Full-library backups include images and their metadata. Schema 1 libraries
-migrate transactionally to schema 2 on first use; older backups remain restorable.
+migrate transactionally to schema 3 on first use; older backups remain restorable.
+
+On a saved note, choose **Manage linked images**, select an imported image and
+choose **Link image**. Image details show **Linked notes**, with controls to link
+or unlink saved notes. **Open** takes you directly to the associated image or
+note. Links save immediately and are separate from unsaved text/metadata edits.
+Refresh links to see changes from other tabs. Unlink keeps both items; deleting
+a note or image removes its links through SQLite foreign keys while keeping the
+other record. Stale link actions are rejected if either record changed.
+
+Full-library backup/restore includes references alongside image metadata and
+original bytes. Schema 2 image libraries migrate to schema 3 without changing
+records or assets. There is no OCR, image AI, annotation or moodboard behavior.
+
+Image/link checks include all three raster formats, original-byte equality,
+duplicate imports, malformed and animated payloads (including APNG), size and
+dimension limits, stale revisions, write failures/retries, both linking views,
+cascading deletion, schema 1/2 migrations, future-schema rejection and verified
+backup roundtrips. Production stop/start and serving a restored backup were also
+checked using an isolated temporary library with Mac Chrome desktop/mobile
+previews and direct-reference navigation. The real user library was not used
+for these checks. Safari and Docker runtime remain unverified.

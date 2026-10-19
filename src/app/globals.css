@@ -332,3 +332,14 @@ mark { background: #fff0ae; color: inherit; border-radius: 2px; }
   .site-nav { flex-wrap: wrap; gap: 18px; }
   .site-nav a { padding-block: 16px; }
 }
+.image-note-links { margin: 24px 0; padding-top: 16px; border-top: 1px solid var(--border); }
+.image-note-links > div { margin-top: 16px; }
+.linked-records { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 20px; }
+.linked-records li { display: grid; gap: 12px; min-width: 0; max-width: 260px; overflow-wrap: anywhere; }
+.linked-records .image-preview img { height: 120px; }
+.linked-records .image-preview { min-height: 120px; }
+.link-form { margin: 20px 0; display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.link-form label { display: grid; gap: 8px; min-width: 0; max-width: 100%; }
+.link-form select { max-width: 100%; padding: 10px; font: inherit; border: 1px solid var(--border); border-radius: 7px; background: var(--background); color: var(--text); }
+select:focus-visible, .linked-records a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.note-card:target { scroll-margin-top: 20px; border-color: var(--accent); }

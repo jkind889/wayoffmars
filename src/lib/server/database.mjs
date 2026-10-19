@@ -40,7 +40,7 @@ export function openLibrary(directory = dataDirectory()) {
     db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;');
     db.exec('BEGIN IMMEDIATE');
     const version = db.prepare('PRAGMA user_version').get().user_version;
-    if (version > 2) throw new Error('This library needs a newer app version. Update before opening it.');
+    if (version > 3) throw new Error('This library needs a newer app version. Update before opening it.');
     if (version === 0) db.exec(`
       CREATE TABLE records (kind TEXT NOT NULL CHECK(kind IN ('notes','pdfs','fonts')), id TEXT NOT NULL, data TEXT NOT NULL, asset TEXT, PRIMARY KEY(kind,id)) STRICT;
       CREATE TABLE imports (kind TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL, PRIMARY KEY(kind,id,fingerprint)) STRICT;
@@ -51,6 +51,19 @@ export function openLibrary(directory = dataDirectory()) {
       DROP TABLE records;
       ALTER TABLE records_v2 RENAME TO records;
       PRAGMA user_version=2;
+    `);
+    if (version < 3) db.exec(`
+      CREATE TABLE image_links (
+        note_kind TEXT NOT NULL DEFAULT 'notes' CHECK(note_kind='notes'),
+        note_id TEXT NOT NULL,
+        image_kind TEXT NOT NULL DEFAULT 'images' CHECK(image_kind='images'),
+        image_id TEXT NOT NULL,
+        PRIMARY KEY(note_id,image_id),
+        FOREIGN KEY(note_kind,note_id) REFERENCES records(kind,id) ON DELETE CASCADE,
+        FOREIGN KEY(image_kind,image_id) REFERENCES records(kind,id) ON DELETE CASCADE
+      ) STRICT;
+      CREATE INDEX image_links_by_image ON image_links(image_id);
+      PRAGMA user_version=3;
     `);
     db.exec('COMMIT');
     return db;

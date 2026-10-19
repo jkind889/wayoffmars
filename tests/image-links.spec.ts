@@ -1,0 +1,103 @@
+import { test, expect } from './fixtures';
+import sharp from 'sharp';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+const headers = { Origin: 'http://127.0.0.1:3107', 'X-Wayoffmars': '1' };
+const note = { id: 'a note / with spaces', title: 'Color study', body: 'A quiet arrangement', tags: [], source: '', createdAt: 1, updatedAt: 1, revision: 'initial' };
+const imageBytes = () => sharp({ create: { width: 80, height: 60, channels: 3, background: '#d22a58' } }).png().toBuffer();
+
+test('link and unlink from both views, navigate direct references and retain both records', async ({ page, request }) => {
+  const bytes = await imageBytes();
+  const { image } = await (await request.post('/api/library?kind=images', { headers, data: { action: 'save', filename: 'Palette.png', bytes: bytes.toString('base64') } })).json();
+  await request.post('/api/library?kind=notes', { headers, data: { action: 'write', note, id: note.id, expectedRevision: null } });
+  await page.goto('/notes');
+  const card = page.getByRole('article', { name: note.title });
+  await card.getByRole('button', { name: 'Manage linked images' }).click();
+  await card.getByLabel('Choose image').selectOption(image.id);
+  await card.getByRole('button', { name: 'Link image', exact: true }).click();
+  await expect(card.getByRole('status').first()).toHaveText('Link saved.');
+  await card.getByRole('link', { name: 'Open Palette.png' }).click();
+  await expect(page.getByLabel('Image title')).toHaveValue('Palette.png');
+  const links = page.getByRole('region', { name: 'Linked notes', exact: true });
+  await expect(links.getByRole('link', { name: 'Open Color study' })).toBeVisible();
+  await links.getByRole('button', { name: 'Unlink Color study' }).click();
+  await expect(links.getByRole('status').first()).toHaveText('Unlinked. The image and note are kept.');
+  await links.getByLabel('Choose note').selectOption(note.id);
+  await links.getByRole('button', { name: 'Link note', exact: true }).click();
+  await expect(links.getByRole('status').first()).toHaveText('Link saved.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/wayoffmars-linked-image-mobile.png', fullPage: true });
+  await links.getByRole('link', { name: 'Open Color study' }).click();
+  await expect(card).toBeInViewport();
+  await card.getByRole('button', { name: 'Manage linked images' }).click();
+  await expect(card.getByRole('link', { name: 'Open Palette.png' })).toBeVisible();
+  await page.screenshot({ path: '/tmp/wayoffmars-linked-note-mobile.png', fullPage: true });
+  await card.getByRole('button', { name: 'Unlink Palette.png' }).click();
+  await expect(card.getByRole('status').first()).toHaveText('Unlinked. The image and note are kept.');
+  expect(await (await request.get('/api/image-links')).json()).toEqual([]);
+  expect(await (await request.get('/api/library?kind=images')).json()).toHaveLength(1);
+  expect(await (await request.get('/api/library?kind=notes')).json()).toHaveLength(1);
+});
+
+test('foreign keys cascade both deletions, reject dangling/stale links and preserve links in verified backups', async ({ request }) => {
+  const bytes = await imageBytes();
+  const importImage = async () => (await (await request.post('/api/library?kind=images', { headers, data: { action: 'save', filename: 'Backup.png', bytes: bytes.toString('base64') } })).json()).image;
+  let image = await importImage();
+  await request.post('/api/library?kind=notes', { headers, data: { action: 'write', note, id: note.id, expectedRevision: null } });
+  const link = { action: 'link', noteId: note.id, imageId: image.id, noteRevision: note.revision, imageRevision: image.revision };
+  const change = (data: object) => request.post('/api/image-links', { headers, data });
+  for (const body of [{ ...link, noteId: 'missing' }, { ...link, imageId: 'f'.repeat(64) }, { ...link, noteRevision: 'stale' }, { ...link, imageRevision: 'stale' }]) expect((await change(body)).status()).toBe(400);
+  expect((await request.post('/api/image-links', { data: link })).status()).toBe(403);
+  expect((await request.get('/api/image-links', { headers: { Origin: 'https://evil.example' } })).status()).toBe(403);
+  expect((await change(link)).ok()).toBe(true); expect((await change(link)).ok()).toBe(true);
+  for (const action of [['link'], ['unlink'], null, {}, 1, 'delete']) expect((await change({ ...link, action })).status()).toBe(400);
+  expect(await (await request.get('/api/image-links')).json()).toEqual([{ noteId: note.id, imageId: image.id }]);
+  const root = mkdtempSync('/tmp/wayoffmars-test-link-backup-'), backup = join(root, 'backup'), restored = join(root, 'restored');
+  execFileSync(process.execPath, ['scripts/library-backup.mjs','backup',backup], { env: { ...process.env, WAYOFFMARS_DATA_DIR: process.env.WAYOFFMARS_TEST_DATA_DIR! } });
+  execFileSync(process.execPath, ['scripts/library-backup.mjs','restore',backup,restored]);
+  expect(readFileSync(join(restored,'assets',image.id))).toEqual(bytes);
+  const check = `import {openLibrary} from './src/lib/server/database.mjs'; const db=openLibrary(process.argv[1]); console.log(JSON.stringify([db.prepare('SELECT note_id,image_id FROM image_links').all(),db.prepare('PRAGMA foreign_key_check').all()])); try {db.prepare("INSERT INTO image_links(note_id,image_id) VALUES('missing',?)").run(process.argv[2]); throw new Error('accepted dangling link');}catch(e){if(!String(e).includes('FOREIGN KEY constraint'))throw e;}db.close();`;
+  const saved = JSON.parse(execFileSync(process.execPath, ['--input-type=module','-e',check,restored,image.id], { encoding: 'utf8' }));
+  expect(saved).toEqual([[{ note_id: note.id, image_id: image.id }], []]);
+  expect((await request.post('/api/library?kind=images', { headers, data: { action: 'delete', id: image.id, expectedRevision: image.revision } })).ok()).toBe(true);
+  expect(await (await request.get('/api/image-links')).json()).toEqual([]);
+  expect(await (await request.get('/api/library?kind=notes')).json()).toHaveLength(1);
+  image = await importImage();
+  expect((await change(link)).status()).toBe(400); // same bytes, new incarnation
+  expect((await change({ ...link, imageRevision: image.revision })).ok()).toBe(true);
+  await request.post('/api/library?kind=notes', { headers, data: { action: 'write', note: null, id: note.id, expectedRevision: note.revision } });
+  expect(await (await request.get('/api/image-links')).json()).toEqual([]);
+  expect(await (await request.get('/api/library?kind=images')).json()).toHaveLength(1);
+});
+
+test('failed link writes remain retryable and stale views can refresh without losing note drafts', async ({ page, request }) => {
+  const { image } = await (await request.post('/api/library?kind=images', { headers, data: { action: 'save', filename: 'Retry.png', bytes: (await imageBytes()).toString('base64') } })).json();
+  await request.post('/api/library?kind=notes', { headers, data: { action: 'write', note, id: note.id, expectedRevision: null } });
+  await page.goto('/notes');
+  await page.getByRole('button', { name: 'Edit Color study' }).click();
+  await page.getByLabel('Title', { exact: true }).fill('Unsaved draft');
+  const card = page.getByRole('article', { name: note.title }), links = card.getByRole('region', { name: 'Linked images' });
+  await card.getByRole('button', { name: 'Manage linked images' }).click();
+  await links.getByLabel('Choose image').selectOption(image.id);
+  await page.route('**/api/image-links', async route => route.request().method() === 'POST' ? route.fulfill({ status: 503, json: { error: 'Disk write failed. Retry.' } }) : route.continue());
+  await links.getByRole('button', { name: 'Link image', exact: true }).click();
+  await expect(links.getByRole('alert')).toContainText('Disk write failed');
+  expect(await (await request.get('/api/image-links')).json()).toEqual([]);
+  await page.unroute('**/api/image-links');
+  await request.post('/api/library?kind=images', { headers, data: { action: 'update', id: image.id, expectedRevision: image.revision, fields: { title: 'Updated reference', source: '', description: '' } } });
+  await links.getByRole('button', { name: 'Link image', exact: true }).click();
+  await expect(links.getByRole('alert')).toContainText('changed in another tab');
+  await links.getByRole('button', { name: 'Refresh links' }).click();
+  await links.getByLabel('Choose image').selectOption(image.id);
+  await links.getByRole('button', { name: 'Link image', exact: true }).click();
+  await expect(links.getByRole('status').first()).toHaveText('Link saved.');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Unsaved draft');
+});
+
+test('v2 image library migration preserves metadata, receipts and bytes and rejects future schemas', async () => {
+  const root = mkdtempSync('/tmp/wayoffmars-test-v2-');
+  const script = `import {DatabaseSync} from 'node:sqlite'; import {mkdirSync,writeFileSync,readFileSync} from 'node:fs'; import {openLibrary,digest} from './src/lib/server/database.mjs'; const dir=process.argv[1];mkdirSync(dir+'/assets');const bytes=Buffer.from('migration fixture'),id=digest(bytes);writeFileSync(dir+'/assets/'+id,bytes);let db=new DatabaseSync(dir+'/library.sqlite');db.exec("CREATE TABLE records(kind TEXT NOT NULL CHECK(kind IN ('notes','pdfs','fonts','images')),id TEXT NOT NULL,data TEXT NOT NULL,asset TEXT,PRIMARY KEY(kind,id)) STRICT;CREATE TABLE imports(kind TEXT NOT NULL,id TEXT NOT NULL,fingerprint TEXT NOT NULL,PRIMARY KEY(kind,id,fingerprint)) STRICT;PRAGMA user_version=2;");db.prepare('INSERT INTO records VALUES(?,?,?,?)').run('images',id,'{"title":"Keep image metadata"}',id);db.prepare('INSERT INTO records VALUES(?,?,?,NULL)').run('notes','note','{"title":"Keep note metadata"}');db.exec("INSERT INTO imports VALUES('notes','note','receipt')"); const before=db.prepare('SELECT * FROM records ORDER BY kind').all();db.close();db=openLibrary(dir);const after=db.prepare('SELECT * FROM records ORDER BY kind').all();db.prepare('INSERT INTO image_links(note_id,image_id) VALUES(?,?)').run('note',id);const result=[JSON.stringify(before)===JSON.stringify(after),db.prepare('PRAGMA user_version').get().user_version,db.prepare('SELECT fingerprint FROM imports').get().fingerprint,readFileSync(dir+'/assets/'+id).equals(bytes),db.prepare('PRAGMA foreign_key_check').all().length]; db.exec('PRAGMA user_version=99');db.close();let rejected=false;try{openLibrary(dir)}catch(e){rejected=String(e).includes('newer app version')} db=new DatabaseSync(dir+'/library.sqlite');result.push(rejected,db.prepare('PRAGMA user_version').get().user_version);db.close();console.log(JSON.stringify(result));`;
+  expect(JSON.parse(execFileSync(process.execPath, ['--input-type=module','-e',script,root], { encoding: 'utf8' }))).toEqual([true, 3, 'receipt', true, 0, true, 99]);
+});
