@@ -217,10 +217,15 @@ and stable IDs as tie breakers. Snippets are highlighted; PDF results cap at 100
 matching pages with total count. Search preserves note drafts.
 
 Notes display 25 results per page. Previous/Next and the page selector keep every
-result reachable; search still covers all saved notes. Direct note links open the
-correct page, and page changes keep unfinished drafts. Full-body search highlights
-are created when **Read full note** opens. Browser Find sees only the rendered
-page; use the app search to find notes elsewhere in the library.
+result reachable; search still covers all saved notes. **List** is the initial
+layout, with compact titles and tags. **Grid** arranges cards with short previews;
+it is not a draggable board. The choice is remembered in this browser when local
+storage is available. Changing views keeps the current search, page and draft.
+Open a note's title to read its body, source, citations and image links; **Edit**
+uses the existing editor. Only the opened note renders its full body. Direct note
+links select the correct page and open that note. Search also offers **Read full
+note** with full-body highlights on demand. Browser Find sees only rendered
+content; use the app search to find notes elsewhere in the library.
 
 ## Checks
 
