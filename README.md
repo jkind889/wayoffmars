@@ -430,10 +430,16 @@ front. Type filters, title search and every-selected-tag filtering work together
 **Filter by tag** uses the same autocomplete as tag editing. Fonts remain untagged
 and outside this mixed view.
 
-In **Fonts** or **Images**, shortlist 2–4 items and choose **Compare**. Shortlists
-survive title filtering within the page. Comparisons use a two-column layout on
-desktop and stack on narrow screens. Escape or **Close comparison** returns to
-browsing. Missing/deleted items are reported when comparison opens. Font text,
+In **Fonts**, open **Font comparison** to show a side panel, then shortlist 2–4
+fonts and choose **Compare fonts** inside it. **Clear shortlist** also lives in
+the panel. The library stays usable alongside it on desktop; on narrow screens,
+the panel stacks above the library controls. **Comparison settings** contains the
+shared specimen controls. Escape while focused inside the panel or **Close
+comparison** closes it and returns focus to its opener without clearing selection.
+In **Images**, **Compare images** opens the existing comparison dialog.
+
+Shortlists survive title filtering within the page. Missing/deleted items are
+checked each time you choose **Compare fonts** or **Compare images**. Font text,
 size, tracking, line height, alignment and colors stay synchronized with the main
 specimens. Installed fonts require the existing explicit permission and preview
 steps; **Shortlist installed font** keeps a temporary decoded copy without saving
