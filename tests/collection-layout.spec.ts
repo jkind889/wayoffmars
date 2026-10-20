@@ -17,6 +17,7 @@ test('collection gallery opens by keyboard, protects edits, filters and reflows'
   await page.screenshot({ path: '/tmp/wayoffmars-collection-gallery-desktop.png', fullPage: true });
   await cards.first().focus(); await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Brand references' })).toBeFocused();
+  await page.getByRole('button', { name: 'Edit collection', exact: true }).click();
   await page.getByLabel('Collection name', { exact: true }).fill('Draft');
   page.once('dialog', dialog => dialog.dismiss());
   await page.getByRole('button', { name: 'Open collection Typography' }).click();

@@ -36,6 +36,7 @@ test('collections create, reorder, remove membership and navigate on desktop/mob
   await page.getByLabel('New collection name').fill('Type project');
   await page.getByRole('button', { name: 'Create collection' }).click();
   await expect(page.getByRole('heading', { name: 'Type project' })).toBeFocused();
+  await page.getByRole('button', { name: 'Edit collection', exact: true }).click();
   await page.getByLabel('Collection name', { exact: true }).fill('Discard this');
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Reload collections' }).click();

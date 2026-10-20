@@ -43,6 +43,7 @@ test('collection tag editor supports keyboard, pending text, cancelled reload, f
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(`/collections?collection=${first.id}`);
   await expect(page.getByRole('heading', { name: 'Materials' })).toBeFocused();
+  await page.getByRole('button', { name: 'Edit collection', exact: true }).click();
   await page.getByLabel('Add tag', { exact: true }).fill('design');
   await expect(page.getByRole('button', { name: 'Save collection details' })).toBeDisabled();
   await page.keyboard.press('Enter');
@@ -70,6 +71,7 @@ test('collection tag editor supports keyboard, pending text, cancelled reload, f
   await page.getByRole('button', { name: 'Save tags', exact: true }).click();
   await expect(page.getByRole('status').first()).toContainText('Tags saved');
   await page.goto(`/collections?collection=${first.id}`);
+  await page.getByRole('button', { name: 'Edit collection', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Remove tag Design' })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
