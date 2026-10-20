@@ -161,7 +161,7 @@ test('appearance controls affect uploaded and installed specimens, reset and ref
     await expect(sample).toHaveCSS('color', 'rgb(238, 238, 238)');
     await expect(sample).toHaveCSS('background-color', 'rgb(34, 34, 34)');
   }
-  await expect(page.locator('.wordmark')).toHaveCSS('color', 'rgb(158, 21, 21)');
+  await expect(page.locator('.wordmark')).toHaveCSS('color', 'rgb(184, 154, 209)');
   await page.screenshot({ path: '/tmp/wayoffmars-font-features-desktop.png', fullPage: true });
   for (const width of [768, 390, 320]) {
     await page.setViewportSize({ width, height: 844 });

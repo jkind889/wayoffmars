@@ -7,7 +7,8 @@ export type FontAppearance = {
   foreground: string;
   background: string;
 };
-export const DEFAULT_FONT_APPEARANCE: FontAppearance = { tracking: 0, lineHeight: 1.6, alignment: 'left', foreground: '#111111', background: '#ffffff' };
+// Initial specimen colors match the app canvas; user-selected colors remain independent.
+export const DEFAULT_FONT_APPEARANCE: FontAppearance = { tracking: 0, lineHeight: 1.6, alignment: 'left', foreground: '#e3dce8', background: '#14101a' };
 export function specimenAppearance(value: FontAppearance): CSSProperties {
   return { letterSpacing: `${value.tracking}em`, lineHeight: value.lineHeight, textAlign: value.alignment, color: value.foreground, backgroundColor: value.background };
 }
