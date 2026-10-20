@@ -353,9 +353,11 @@ for an explicit change.
 
 To reuse an existing image, choose **Existing image**, **Review existing image**,
 check **Use as texture**, then **Save image details**. The same checkbox is also
-available in Images. Uncheck and save to remove it from Textures while retaining
-the image, original, tags, links and collection memberships. All texture images
-remain visible in Images. Existing libraries are never automatically classified.
+available in Images. Classified textures appear only in the Textures gallery;
+Images shows unclassified images. Uncheck and save to return an item to Images
+while retaining its original, tags, links and collection memberships. Existing
+libraries are never automatically classified, and a tag named “Texture” does
+not change classification.
 
 Filter textures by title/filename/description, shared image tag, and collection.
 Image details provide **Manage shared tags**, controls to add/remove membership
