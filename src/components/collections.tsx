@@ -33,7 +33,7 @@ function CollectionEditor({ collection, items, vocabulary, busy, save, remove, o
   const candidates = items.filter(item => !collection.members.some(member => memberKey(member) === memberKey(item)) && (kind === 'all' || item.kind === kind) && item.title.toLowerCase().includes(query.trim().toLowerCase()));
   function move(index: number, direction: number) { const members = [...collection.members]; [members[index], members[index + direction]] = [members[index + direction], members[index]]; void save(name, members, tags); }
   return <section aria-label={`Collection ${collection.name}`} className="note-editor">
-    <h2 ref={heading} tabIndex={-1}>{collection.name}</h2>
+    <h2 id="collection-detail-heading" ref={heading} tabIndex={-1}>{collection.name}</h2>
     <form onSubmit={event => { event.preventDefault(); if (pending.trim()) return; void save(name, collection.members, tags); }}><fieldset disabled={busy}><label>Collection name<input required maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><TagPicker value={tags} vocabulary={vocabulary} onChange={setTags} onPendingChange={setPending} disabled={busy} /><button className="secondary-button" disabled={!dirty || !!pending.trim()}>Save collection details</button></fieldset></form>
     <p className="storage-note">Membership changes save immediately, including the name and tags above. Add or clear pending tag text before saving. Sources are referenced without copying files. Deleted sources disappear from collections after reload.</p>
     <fieldset disabled={busy || !!pending.trim()}><legend>Add existing items</legend>
@@ -60,28 +60,61 @@ export function Collections() {
   const [query, setQuery] = useState(''), [tagFilter, setTagFilter] = useState(''), [untagged, setUntagged] = useState(false);
   const [reloadVersion, setReloadVersion] = useState(0);
   const lock = useRef(false), unsaved = useRef(false);
+  const dialog = useRef<HTMLDialogElement>(null), newButton = useRef<HTMLButtonElement>(null), nameInput = useRef<HTMLInputElement>(null);
+  const [createError, setCreateError] = useState('');
+  const focusNew = useRef(false);
+  useEffect(() => { if (createError) nameInput.current?.focus(); }, [createError]);
+  useEffect(() => { if (!busy && focusNew.current) { focusNew.current = false; newButton.current?.focus(); } }, [busy]);
+  function closeCreate() { dialog.current?.close(); newButton.current?.focus(); }
+  function closeCollection() {
+    if (unsaved.current && !window.confirm('Close collection? Unsaved collection edits will be discarded.')) return;
+    const card = document.getElementById(`collection-card-${selected}`);
+    setSelected(''); (card ?? newButton.current)?.focus();
+  }
   useEffect(() => { let cancelled = false; localRequest<CollectionsLibrary>('collections').then(data => { if (!cancelled) { setLibrary(data); setSelected(new URLSearchParams(window.location.search).get('collection') ?? ''); } }).catch(error => { if (!cancelled) setError(error.message); }).finally(() => { if (!cancelled) setBusy(false); }); return () => { cancelled = true; }; }, []);
   useEffect(() => {
     if (!name.trim()) return;
     const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', guard); return () => window.removeEventListener('beforeunload', guard);
   }, [name]);
-  async function change(input: object) {
+  async function change(input: object, creating = false) {
     if (lock.current) return;
-    lock.current = true; setBusy(true); setError('');
+    lock.current = true; setBusy(true); setError(''); setCreateError('');
     try {
       const result = await localRequest<Collection | null>('collections', input);
+      if (creating) dialog.current?.close();
       setLibrary(previous => ({ ...previous, vocabulary: [...new Map([...previous.vocabulary, ...(result?.tags ?? [])].map(tag => [tag.key, tag])).values()].sort((a,b) => a.key.localeCompare(b.key)), collections: result ? [...previous.collections.filter(c => c.id !== result.id), result] : previous.collections.filter(c => c.id !== selected) }));
-      if (result) { setSelected(result.id); if ('expectedRevision' in input && input.expectedRevision === null) setName(''); } else setSelected('');
+      if (result) { setSelected(result.id); if ('expectedRevision' in input && input.expectedRevision === null) setName(''); } else { setSelected(''); focusNew.current = true; }
       setStatus(result ? 'Collection saved on this Mac.' : 'Collection removed. Source items are kept.');
-    } catch (error) { setError((error as Error).message); } finally { lock.current = false; setBusy(false); }
+    } catch (error) { if (creating) { setCreateError((error as Error).message); } else setError((error as Error).message); } finally { lock.current = false; setBusy(false); }
   }
   const collection = library.collections.find(c => c.id === selected);
   const results = library.collections.filter(c => c.name.toLowerCase().includes(query.trim().toLowerCase()) && (!tagFilter || c.tags.some(tag => tag.key === tagFilter)) && (!untagged || c.tags.length === 0));
   return <section className="collections-workspace" aria-label="Collections">
     {error && <p className="font-error" role="alert">{error}</p>}<p role="status">{status}</p>
-    <form className="note-editor" onSubmit={event => { event.preventDefault(); if (unsaved.current && !window.confirm('Discard unsaved collection edits?')) return; void change({ action: 'save', id: crypto.randomUUID(), expectedRevision: null, name, members: [] }); }}><fieldset disabled={busy}><label>New collection name<input required maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><button className="primary-button">Create collection</button></fieldset></form>
+    <div className="backup-actions">
+    <button ref={newButton} className="primary-button" disabled={busy} onClick={() => { setCreateError(''); dialog.current?.showModal(); nameInput.current?.focus(); }}>New collection</button>
     <button className="secondary-button" disabled={busy} onClick={async () => { if (lock.current) return; if (unsaved.current && !window.confirm('Reload collections? Unsaved collection edits will be discarded.')) return; lock.current = true; setBusy(true); try { setLibrary(await localRequest<CollectionsLibrary>('collections')); setError(''); setStatus('Collections reloaded.'); setReloadVersion(value => value + 1); } catch (error) { setError((error as Error).message); } finally { lock.current = false; setBusy(false); } }}>Reload collections</button>
+    </div>
+    <dialog ref={dialog} className="collection-create-dialog" aria-labelledby="create-collection-title" onCancel={event => { event.preventDefault(); if (!lock.current) closeCreate(); }} onKeyDown={event => {
+      if (event.key !== 'Tab') return;
+      const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)'));
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }}>
+      <div className="library-heading"><h2 id="create-collection-title">New collection</h2><button className="secondary-button" aria-label="Close new collection" disabled={busy} onClick={closeCreate}>Close</button></div>
+      <form className="note-editor" onSubmit={event => {
+        event.preventDefault();
+        if (!name.trim()) { setCreateError('Enter a collection name.'); nameInput.current?.focus(); return; }
+        if (unsaved.current && !window.confirm('Discard unsaved collection edits?')) return;
+        void change({ action: 'save', id: crypto.randomUUID(), expectedRevision: null, name, members: [] }, true);
+      }}>
+        <fieldset disabled={busy}><label>New collection name<input ref={nameInput} required maxLength={120} value={name} aria-describedby={createError ? 'create-collection-error' : undefined} aria-invalid={createError ? true : undefined} onChange={event => { setName(event.target.value); setCreateError(''); }} /></label></fieldset>
+        {createError && <p id="create-collection-error" className="font-error" role="alert">{createError}</p>}
+        <div className="backup-actions"><button className="primary-button" disabled={busy}>{busy ? 'Creating collection…' : 'Create collection'}</button><button type="button" className="secondary-button" disabled={busy} onClick={closeCreate}>Cancel</button></div>
+      </form>
+    </dialog>
     <fieldset className="tag-filters"><legend>Filter collections</legend><div className="tag-filter-fields">
       <label>Search collections<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
       <label>Collection tag<select value={tagFilter} onChange={event => setTagFilter(event.target.value)}><option value="">All tags</option>{library.vocabulary.map(tag => <option key={tag.key} value={tag.key}>{tag.label}</option>)}</select></label>
@@ -89,8 +122,21 @@ export function Collections() {
       <button className="secondary-button" onClick={() => { setQuery(''); setTagFilter(''); setUntagged(false); }}>Clear collection filters</button>
       <p aria-live="polite">{results.length} of {library.collections.length} collections match</p>
     </fieldset>
-    <label>Open collection<select disabled={busy} value={selected} onChange={event => { if (unsaved.current && !window.confirm('Switch collections? Unsaved collection edits will be discarded.')) return; setSelected(event.target.value); }}><option value="">Choose a collection</option>{collection && !results.includes(collection) && <option value={collection.id}>{collection.name} (open; outside filters)</option>}{results.map(c => <option key={c.id} value={c.id}>{c.name} ({c.members.length})</option>)}</select></label>
-    {collection && <CollectionEditor key={`${collection.id}:${collection.revision}:${reloadVersion}`} collection={collection} items={library.items} vocabulary={library.vocabulary} busy={busy} onDirty={value => { unsaved.current = value; }} save={async (name, members, tags) => { await change({ action: 'save', id: collection.id, expectedRevision: collection.revision, name, members, tags }); }} remove={() => { if (window.confirm(`Delete collection “${collection.name}”? Source items will be kept.`)) void change({ action: 'delete', id: collection.id, expectedRevision: collection.revision }); }} />}
+    <ul className="collection-grid" aria-label="Saved collections">{results.map(c => <li key={c.id}>
+      <button id={`collection-card-${c.id}`} className="collection-card" disabled={busy} aria-label={`Open collection ${c.name}`} aria-expanded={selected === c.id} aria-controls={selected === c.id ? 'collection-detail' : undefined} onClick={() => {
+        if (selected === c.id) { document.getElementById('collection-detail-heading')?.focus(); return; }
+        if (unsaved.current && !window.confirm('Switch collections? Unsaved collection edits will be discarded.')) return;
+        setSelected(c.id);
+      }}>
+        <span className="collection-card-title">{c.name}</span>
+        <span className="storage-note">{c.members.length} {c.members.length === 1 ? 'item' : 'items'}</span>
+        {c.tags.length > 0 && <span className="note-tags">{c.tags.map(tag => <span className="note-tag" key={tag.key}>{tag.label}</span>)}</span>}
+      </button>
+    </li>)}</ul>
+    {!results.length && library.collections.length > 0 && <p className="empty-state">No collections match these filters.</p>}
+    {collection && <div id="collection-detail"><button className="secondary-button" disabled={busy} onClick={closeCollection}>Close collection</button>
+      {!results.includes(collection) && <p className="storage-note">This open collection is outside the current filters.</p>}
+    <CollectionEditor key={`${collection.id}:${collection.revision}:${reloadVersion}`} collection={collection} items={library.items} vocabulary={library.vocabulary} busy={busy} onDirty={value => { unsaved.current = value; }} save={async (name, members, tags) => { await change({ action: 'save', id: collection.id, expectedRevision: collection.revision, name, members, tags }); }} remove={() => { if (window.confirm(`Delete collection “${collection.name}”? Source items will be kept.`)) void change({ action: 'delete', id: collection.id, expectedRevision: collection.revision }); }} /></div>}
     {!library.collections.length && !busy && <p className="empty-state">Create a small project collection, then add existing library items.</p>}
   </section>;
 }

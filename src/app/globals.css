@@ -318,7 +318,16 @@ summary { width: fit-content; padding-block: 10px; cursor: pointer; font-size: 1
   .font-library > .library-tools { grid-column: 1; grid-row: auto; }
   .font-results { grid-column: 1; grid-row: auto; }
 }
-.collections-workspace > label { display: grid; gap: .5rem; margin: 1rem 0; }
+.collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 20px; padding: 0; margin: 24px 0; list-style: none; }
+.collection-grid > li { min-width: 0; }
+.collection-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; width: 100%; height: 100%; min-height: 160px; padding: 24px; border: 1px solid var(--border); background: var(--background); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.collection-card:hover:enabled { background: var(--surface); }
+.collection-card[aria-expanded="true"] { border-color: var(--rule); }
+.collection-card-title { font-weight: 600; }
+.collection-card .note-tags { margin: 0; }
+.collection-create-dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 20px; border: 1px solid var(--border); background: var(--background); color: var(--text); }
+.collection-create-dialog::backdrop { background: #0009; }
+.collection-create-dialog .note-editor { margin: 20px 0 0; padding: 0; border: 0; background: transparent; }
 .collections-workspace select { width: 100%; min-width: 0; padding: .65rem; font: inherit; background: white; color: #111; border: 1px solid #777; }
 .collections-workspace fieldset { min-width: 0; }
 

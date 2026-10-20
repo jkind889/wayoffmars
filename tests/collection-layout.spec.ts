@@ -1,0 +1,72 @@
+import { test, expect } from './fixtures';
+import { post } from './helpers/tags';
+import { randomUUID } from 'node:crypto';
+
+test('collection gallery opens by keyboard, protects edits, filters and reflows', async ({ page, request }) => {
+  for (const name of ['Brand references', 'Material studies', 'Typography', 'Archive']) {
+    await post(request, 'collections', { action: 'save', id: randomUUID(), expectedRevision: null, name, members: [], tags: ['Design'] });
+  }
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/collections');
+  const cards = page.getByRole('list', { name: 'Saved collections' }).getByRole('button');
+  await expect(cards).toHaveCount(4);
+  await expect(page.getByLabel('Collection name', { exact: true })).toHaveCount(0);
+  await expect(cards.first()).toContainText('Design');
+  const first = await cards.nth(0).boundingBox(), second = await cards.nth(1).boundingBox();
+  expect(first!.y).toBe(second!.y); expect(first!.x).toBeLessThan(second!.x);
+  await page.screenshot({ path: '/tmp/wayoffmars-collection-gallery-desktop.png', fullPage: true });
+  await cards.first().focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Brand references' })).toBeFocused();
+  await page.getByLabel('Collection name', { exact: true }).fill('Draft');
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('button', { name: 'Open collection Typography' }).click();
+  await expect(page.getByLabel('Collection name', { exact: true })).toHaveValue('Draft');
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('button', { name: 'Close collection', exact: true }).click();
+  await expect(page.getByLabel('Collection name', { exact: true })).toHaveValue('Draft');
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Close collection', exact: true }).click();
+  await expect(cards.first()).toBeFocused();
+  await page.getByLabel('Search collections').fill('no match');
+  await expect(cards).toHaveCount(0);
+  await expect(page.getByText('No collections match these filters.')).toBeVisible();
+  await page.getByRole('button', { name: 'Clear collection filters' }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileFirst = await cards.nth(0).boundingBox(), mobileSecond = await cards.nth(1).boundingBox();
+  expect(mobileFirst!.x).toBe(mobileSecond!.x); expect(mobileFirst!.y).toBeLessThan(mobileSecond!.y);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await page.screenshot({ path: '/tmp/wayoffmars-collection-gallery-mobile.png', fullPage: true });
+  expect(errors).toEqual([]);
+});
+
+test('new collection modal traps focus, cancels, validates, retries and opens created contents', async ({ page, request }) => {
+  await page.goto('/collections');
+  const opener = page.getByRole('button', { name: 'New collection', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'New collection', exact: true });
+  await opener.click();
+  const name = dialog.getByLabel('New collection name');
+  await expect(name).toBeFocused();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).focus(); await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Close new collection' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape'); await expect(dialog).not.toBeVisible(); await expect(opener).toBeFocused();
+  await opener.click(); await name.fill('   '); await name.press('Enter');
+  await expect(dialog.getByRole('alert')).toHaveText('Enter a collection name.'); await expect(name).toBeFocused();
+  expect((await (await request.get('/api/library?kind=collections')).json()).collections).toHaveLength(0);
+  await page.route('**/api/library?kind=collections', route => route.request().method() === 'POST' ? route.fulfill({ status: 400, json: { error: 'Please retry this save.' } }) : route.continue(), { times: 1 });
+  await name.fill('New project'); await name.press('Enter');
+  await expect(dialog.getByRole('alert')).toHaveText('Please retry this save.'); await expect(name).toHaveValue('New project'); await expect(name).toBeFocused();
+  await page.screenshot({ path: '/tmp/wayoffmars-collection-modal-desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await page.screenshot({ path: '/tmp/wayoffmars-collection-modal-mobile.png' });
+  await name.press('Enter'); await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: 'New project', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Open collection New project' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close collection', exact: true }).click();
+  await opener.click(); await expect(name).toHaveValue('');
+  await dialog.getByRole('button', { name: 'Close new collection' }).click(); await expect(opener).toBeFocused();
+});

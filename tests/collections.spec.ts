@@ -32,6 +32,7 @@ test('collections create, reorder, remove membership and navigate on desktop/mob
   const bytes = readFileSync('tests/fixtures/fonts/SourceSerif4-Regular.ttf');
   expect((await post(request, 'fonts', { action: 'save', font: { id: createHash('sha256').update(bytes).digest('hex'), name: 'SourceSerif4-Regular.ttf', size: bytes.length, bytes: bytes.toString('base64'), addedAt: 1 } })).ok()).toBe(true);
   await page.goto('/collections');
+  await page.getByRole('button', { name: 'New collection', exact: true }).click();
   await page.getByLabel('New collection name').fill('Type project');
   await page.getByRole('button', { name: 'Create collection' }).click();
   await expect(page.getByRole('heading', { name: 'Type project' })).toBeFocused();
@@ -44,11 +45,15 @@ test('collections create, reorder, remove membership and navigate on desktop/mob
     await page.getByRole('button', { name: 'Add to collection' }).click();
     await expect(page.getByRole('heading', { name: 'Type project' })).toBeFocused();
   }
+  await page.getByRole('button', { name: 'New collection', exact: true }).click();
   await page.getByLabel('New collection name').fill('Next project draft');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Move Design.pdf up' }).focus(); await page.keyboard.press('Enter');
   await expect(page.getByRole('article').nth(1)).toHaveAttribute('aria-label', 'Design.pdf');
+  await page.getByRole('button', { name: 'New collection', exact: true }).click();
   await expect(page.getByLabel('New collection name')).toHaveValue('Next project draft');
   await page.getByLabel('New collection name').fill('');
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Remove Palette.png from collection' }).click();
   await expect(page.getByRole('article')).toHaveCount(3);
   await expect(page.locator('.font-sample')).toBeVisible();

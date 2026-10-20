@@ -55,7 +55,7 @@ test('collection tag editor supports keyboard, pending text, cancelled reload, f
   page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Reload collections' }).click();
   await expect(page.getByLabel('Add tag', { exact: true })).toHaveValue('');
   await page.getByRole('combobox', { name: 'Collection tag', exact: true }).selectOption('design');
-  await expect(page.getByLabel('Open collection').locator('option')).toHaveCount(2);
+  await expect(page.getByRole('list', { name: 'Saved collections' }).getByRole('button')).toHaveCount(1);
   await expect(page.getByText('1 of 2 collections match')).toBeVisible();
   await page.screenshot({ path: '/tmp/wayoffmars-collection-tags-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
