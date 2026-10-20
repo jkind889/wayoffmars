@@ -1,13 +1,14 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
-import { openLibrary } from './database.mjs';
+import { normalizeTags } from '../tag-model.mjs';
+import { openLibrary, setCollectionTags, collectionTags } from './database.mjs';
 import { memberKey, type Collection, type CollectionsLibrary, type Member } from '../collection-model';
 
 type DB = ReturnType<typeof openLibrary>;
 function collection(db: DB, id: string): Collection {
   const row = db.prepare('SELECT * FROM collections WHERE id=?').get(id);
   if (!row) throw new Error('This collection was deleted. Reload collections.');
-  return { ...row, members: db.prepare('SELECT kind,record_id AS id FROM collection_members WHERE collection_id=? ORDER BY position').all(id) } as Collection;
+  return { ...row, tags: collectionTags(db, id), members: db.prepare('SELECT kind,record_id AS id FROM collection_members WHERE collection_id=? ORDER BY position').all(id) } as Collection;
 }
 export function readCollections(): CollectionsLibrary {
   const db = openLibrary();
@@ -21,7 +22,8 @@ export function readCollections(): CollectionsLibrary {
         return [{ kind: row.kind, id: row.id, title, preview: String(data.body ?? data.description ?? data.pages?.[0]?.text ?? `${data.size ?? 0} bytes · Saved font`).slice(0, 400) } as CollectionsLibrary['items'][number]];
       } catch { return []; }
     });
-    db.exec('COMMIT'); return { collections, items };
+    const vocabulary = db.prepare('SELECT key,label FROM tags ORDER BY key').all() as CollectionsLibrary['vocabulary'];
+    db.exec('COMMIT'); return { collections, items, vocabulary };
   } finally { db.close(); }
 }
 export function changeCollection(input: Record<string, unknown>): Collection | null {
@@ -42,12 +44,14 @@ export function changeCollection(input: Record<string, unknown>): Collection | n
       return { kind: value.kind, id: value.id };
     });
     if (new Set(members.map(memberKey)).size !== members.length) throw new Error('An item may appear only once in a collection.');
+    const tags = input.tags === undefined ? undefined : normalizeTags(input.tags);
     const id = input.id;
     const now = Date.now(), revision = randomUUID();
     db.prepare('INSERT INTO collections VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name').run(input.id, input.name.trim(), revision, now, now);
     db.prepare('DELETE FROM collection_members WHERE collection_id=?').run(input.id);
     members.forEach((member, index) => db.prepare('INSERT INTO collection_members VALUES(?,?,?,?)').run(id, member.kind, member.id, index));
     db.prepare('UPDATE collections SET revision=?,updatedAt=? WHERE id=?').run(revision, Math.max(now, Number(row?.updatedAt ?? 0)), input.id);
+    if (tags !== undefined) setCollectionTags(db, id, tags);
     const result = collection(db, input.id); db.exec('COMMIT'); return result;
   } finally { db.close(); }
 }

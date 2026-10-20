@@ -64,9 +64,9 @@ test('collections create, reorder, remove membership and navigate on desktop/mob
 test('schema4 migrates transactionally and ordered references survive verified backup restore', async ({ request }) => {
   await seed(request);
   const root = mkdtempSync('/tmp/wayoffmars-test-collections-');
-  const oldScript = `import {openLibrary} from './src/lib/server/database.mjs'; let db=openLibrary(process.argv[1]); db.exec("DROP TABLE pdf_excerpts;DROP TABLE collection_members;DROP TABLE collections;PRAGMA user_version=4;INSERT INTO records VALUES('notes','legacy','{}',NULL);INSERT INTO imports VALUES('notes','legacy','receipt');");db.close();db=openLibrary(process.argv[1]);console.log(JSON.stringify([db.prepare('PRAGMA user_version').get().user_version,db.prepare('SELECT id FROM records').get().id,db.prepare('SELECT fingerprint FROM imports').get().fingerprint,db.prepare('PRAGMA foreign_key_check').all()]));db.close();`;
+  const oldScript = `import {openLibrary} from './src/lib/server/database.mjs'; let db=openLibrary(process.argv[1]); db.exec("DROP TABLE collection_tags;DROP TABLE pdf_excerpts;DROP TABLE collection_members;DROP TABLE collections;PRAGMA user_version=4;INSERT INTO records VALUES('notes','legacy','{}',NULL);INSERT INTO imports VALUES('notes','legacy','receipt');");db.close();db=openLibrary(process.argv[1]);console.log(JSON.stringify([db.prepare('PRAGMA user_version').get().user_version,db.prepare('SELECT id FROM records').get().id,db.prepare('SELECT fingerprint FROM imports').get().fingerprint,db.prepare('PRAGMA foreign_key_check').all()]));db.close();`;
   const migrated = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', oldScript, root + '/old'], { encoding: 'utf8' }));
-  expect(migrated).toEqual([6, 'legacy', 'receipt', []]);
+  expect(migrated).toEqual([7, 'legacy', 'receipt', []]);
   const state: CollectionsLibrary = await (await request.get('/api/library?kind=collections')).json();
   const collection = await (await post(request, 'collections', { action: 'save', id: randomUUID(), expectedRevision: null, name: 'Backup project', members: state.items.map(({ kind, id }) => ({ kind, id })) })).json();
   execFileSync(process.execPath, ['scripts/library-backup.mjs', 'backup', root + '/backup'], { env: { ...process.env, WAYOFFMARS_DATA_DIR: process.env.WAYOFFMARS_TEST_DATA_DIR! } });

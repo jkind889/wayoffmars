@@ -74,5 +74,5 @@ test('v3 migration preserves note labels, receipts and links; repeated opens and
     for(let i=0;i<3;i++){db=openLibrary(process.argv[1]);db.close();}
     db=openLibrary(process.argv[1]);console.log(JSON.stringify([db.prepare('PRAGMA user_version').get().user_version,JSON.stringify(before)===JSON.stringify(db.prepare('SELECT * FROM records ORDER BY kind,id').all()),db.prepare('SELECT * FROM record_tags ORDER BY tag_key').all(),db.prepare('SELECT label FROM tags ORDER BY key').all(),db.prepare('SELECT fingerprint FROM imports').get().fingerprint,db.prepare('SELECT COUNT(*) AS n FROM image_links').get().n,db.prepare('PRAGMA foreign_key_check').all()]));db.close();`;
   const result = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', script, root], { encoding: 'utf8' }));
-  expect(result).toEqual([6, true, ['café', 'color', 'design'].map(tag_key => ({ kind: 'notes', record_id: 'old', tag_key })), [{ label: 'Café' }, { label: 'Color' }, { label: 'Design' }], 'receipt', 1, []]);
+  expect(result).toEqual([7, true, ['café', 'color', 'design'].map(tag_key => ({ kind: 'notes', record_id: 'old', tag_key })), [{ label: 'Café' }, { label: 'Color' }, { label: 'Design' }], 'receipt', 1, []]);
 });

@@ -1,0 +1,75 @@
+import { test, expect } from './fixtures';
+import { seed, post } from './helpers/tags';
+import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import type { TagLibrary } from '../src/lib/tag-storage';
+
+test('collection tags share vocabulary, preserve order, reject stale writes and survive backup', async ({ request }) => {
+  const { image, pdf } = await seed(request);
+  const members = [{ kind: 'pdfs', id: pdf.id }, { kind: 'images', id: image.id }];
+  const input = { action: 'save', id: randomUUID(), expectedRevision: null, name: 'Materials', members, tags: ['DESIGN', 'Paper'] };
+  const saved = await (await post(request, 'collections', input)).json();
+  expect(saved.tags).toEqual([{ key: 'design', label: 'Design' }, { key: 'paper', label: 'Paper' }]);
+  let library: TagLibrary = await (await request.get('/api/library?kind=tags')).json();
+  expect(library.vocabulary.find(t => t.key === 'design')!.count).toBe(2);
+  const changed = await (await post(request, 'tags', { kind: 'collections', id: saved.id, expectedRevision: saved.revision, tags: ['Paper'] })).json();
+  expect((await post(request, 'collections', { ...input, expectedRevision: saved.revision, members: [...members].reverse() })).status()).toBe(400);
+  expect((await post(request, 'tags', { kind: 'collections', id: saved.id, expectedRevision: saved.revision, tags: [] })).status()).toBe(400);
+  for (const tags of [[''], [3], ['x'.repeat(1001)]]) expect((await post(request, 'collections', { ...input, expectedRevision: changed.revision, tags })).status()).toBe(400);
+  const reordered = await (await post(request, 'collections', { ...input, expectedRevision: changed.revision, members: [...members].reverse(), tags: undefined })).json();
+  expect(reordered.members).toEqual([...members].reverse()); expect(reordered.tags).toEqual(changed.tags);
+  const root = mkdtempSync('/tmp/wayoffmars-test-collection-tags-');
+  execFileSync(process.execPath, ['scripts/library-backup.mjs', 'backup', root + '/backup'], { env: { ...process.env, WAYOFFMARS_DATA_DIR: process.env.WAYOFFMARS_TEST_DATA_DIR! } });
+  execFileSync(process.execPath, ['scripts/library-backup.mjs', 'restore', root + '/backup', root + '/restored']);
+  const result = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `import {openLibrary} from './src/lib/server/database.mjs';const db=openLibrary(process.argv[1]);console.log(JSON.stringify([db.prepare('SELECT * FROM collection_tags').all(),db.prepare('SELECT kind,record_id AS id FROM collection_members ORDER BY position').all(),db.prepare('PRAGMA foreign_key_check').all()]));db.close();`, root + '/restored'], { encoding: 'utf8' }));
+  expect(result).toEqual([[{ collection_id: saved.id, tag_key: 'paper' }], [...members].reverse(), []]);
+  expect((await post(request, 'collections', { action: 'delete', id: saved.id, expectedRevision: reordered.revision })).ok()).toBe(true);
+  library = await (await request.get('/api/library?kind=tags')).json();
+  expect(library.vocabulary.find(t => t.key === 'paper')!.count).toBe(0);
+  expect(await (await request.get('/api/library?kind=images')).json()).toHaveLength(1);
+});
+
+test('schema6 migration and repeated opens preserve existing records, vocabulary and ordered collections', async () => {
+  const root = mkdtempSync('/tmp/wayoffmars-test-collection-tags-v6-');
+  const result = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e', `import {openLibrary} from './src/lib/server/database.mjs';let db=openLibrary(process.argv[1]);db.exec("DROP TABLE collection_tags;PRAGMA user_version=6;INSERT INTO records VALUES('notes','n','{}',NULL);INSERT INTO tags VALUES('paper','Paper');INSERT INTO record_tags VALUES('notes','n','paper');INSERT INTO imports VALUES('notes','n','receipt');INSERT INTO collections VALUES('c','Keep me','rev',1,2);INSERT INTO collection_members VALUES('c','notes','n',3);");const tables=['records','imports','tags','record_tags','collections','collection_members'];const before=tables.map(t=>db.prepare('SELECT * FROM '+t).all());db.close();for(let i=0;i<3;i++){db=openLibrary(process.argv[1]);db.close();}db=openLibrary(process.argv[1]);console.log(JSON.stringify([db.prepare('PRAGMA user_version').get().user_version,JSON.stringify(before)===JSON.stringify(tables.map(t=>db.prepare('SELECT * FROM '+t).all())),db.prepare('SELECT * FROM collection_tags').all(),db.prepare('PRAGMA foreign_key_check').all()]));db.close();`, root], { encoding: 'utf8' }));
+  expect(result).toEqual([7, true, [], []]);
+});
+
+test('collection tag editor supports keyboard, pending text, cancelled reload, filters and shared Tags links', async ({ page, request }) => {
+  await seed(request);
+  const first = await (await post(request, 'collections', { action: 'save', id: randomUUID(), expectedRevision: null, name: 'Materials', members: [] })).json();
+  await post(request, 'collections', { action: 'save', id: randomUUID(), expectedRevision: null, name: 'Other', members: [] });
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await page.goto(`/collections?collection=${first.id}`);
+  await expect(page.getByRole('heading', { name: 'Materials' })).toBeFocused();
+  await page.getByLabel('Add tag', { exact: true }).fill('design');
+  await expect(page.getByRole('button', { name: 'Save collection details' })).toBeDisabled();
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Add tag', { exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Save collection details' }).click();
+  await expect(page.getByRole('button', { name: 'Remove tag Design' })).toBeVisible();
+  await page.getByLabel('Add tag', { exact: true }).fill('Uncommitted');
+  page.once('dialog', dialog => dialog.dismiss()); await page.getByRole('button', { name: 'Reload collections' }).click();
+  await expect(page.getByLabel('Add tag', { exact: true })).toHaveValue('Uncommitted');
+  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Reload collections' }).click();
+  await expect(page.getByLabel('Add tag', { exact: true })).toHaveValue('');
+  await page.getByRole('combobox', { name: 'Collection tag', exact: true }).selectOption('design');
+  await expect(page.getByLabel('Open collection').locator('option')).toHaveCount(2);
+  await expect(page.getByText('1 of 2 collections match')).toBeVisible();
+  await page.screenshot({ path: '/tmp/wayoffmars-collection-tags-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/wayoffmars-collection-tags-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: 'Clear collection filters' }).click();
+  await page.getByLabel('Untagged collections').check();
+  await expect(page.getByText('1 of 2 collections match')).toBeVisible();
+  await page.goto(`/tags?kind=collections&id=${first.id}`);
+  await expect(page.getByRole('heading', { name: 'Tags for Materials' })).toBeVisible();
+  await page.getByRole('button', { name: 'Remove tag Design' }).click();
+  await page.getByRole('button', { name: 'Save tags', exact: true }).click();
+  await expect(page.getByRole('status').first()).toContainText('Tags saved');
+  await page.goto(`/collections?collection=${first.id}`);
+  await expect(page.getByRole('button', { name: 'Remove tag Design' })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

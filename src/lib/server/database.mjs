@@ -41,7 +41,7 @@ export function openLibrary(directory = dataDirectory()) {
     db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;');
     db.exec('BEGIN IMMEDIATE');
     const version = db.prepare('PRAGMA user_version').get().user_version;
-    if (version > 6) throw new Error('This library needs a newer app version. Update before opening it.');
+    if (version > 7) throw new Error('This library needs a newer app version. Update before opening it.');
     if (version === 0) db.exec(`
       CREATE TABLE records (kind TEXT NOT NULL CHECK(kind IN ('notes','pdfs','fonts')), id TEXT NOT NULL, data TEXT NOT NULL, asset TEXT, PRIMARY KEY(kind,id)) STRICT;
       CREATE TABLE imports (kind TEXT NOT NULL, id TEXT NOT NULL, fingerprint TEXT NOT NULL, PRIMARY KEY(kind,id,fingerprint)) STRICT;
@@ -116,6 +116,15 @@ export function openLibrary(directory = dataDirectory()) {
       CREATE INDEX pdf_excerpts_by_source ON pdf_excerpts(source_id);
       PRAGMA user_version=6;
     `);
+    if (version < 7) db.exec(`
+      CREATE TABLE collection_tags (
+        collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+        tag_key TEXT NOT NULL REFERENCES tags(key),
+        PRIMARY KEY(collection_id,tag_key)
+      ) STRICT;
+      CREATE INDEX collection_tags_by_tag ON collection_tags(tag_key);
+      PRAGMA user_version=7;
+    `);
     db.exec('COMMIT');
     return db;
   } catch (error) { db.close(); throw error; }
@@ -130,4 +139,17 @@ export function setRecordTags(db, kind, id, labels) {
     db.prepare('INSERT INTO tags(key,label) VALUES(?,?) ON CONFLICT DO NOTHING').run(key, label.trim());
     db.prepare('INSERT INTO record_tags VALUES(?,?,?) ON CONFLICT DO NOTHING').run(kind, id, key);
   }
+}
+
+// Collections share vocabulary, with foreign keys to their existing table.
+export function setCollectionTags(db, id, labels) {
+  db.prepare('DELETE FROM collection_tags WHERE collection_id=?').run(id);
+  for (const label of labels) {
+    const key = tagKey(label);
+    db.prepare('INSERT INTO tags(key,label) VALUES(?,?) ON CONFLICT DO NOTHING').run(key, label.trim());
+    db.prepare('INSERT INTO collection_tags VALUES(?,?) ON CONFLICT DO NOTHING').run(id, key);
+  }
+}
+export function collectionTags(db, id) {
+  return db.prepare('SELECT t.key,t.label FROM collection_tags c JOIN tags t ON t.key=c.tag_key WHERE c.collection_id=? ORDER BY t.key').all(id);
 }
