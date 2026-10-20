@@ -17,11 +17,30 @@ npm run build
 npm start
 ```
 
-Open http://localhost:3000 or http://127.0.0.1:3000. Native scripts bind to
-127.0.0.1; production forces loopback. The API validates loopback Host and exact
-Origin, rejects cross-site requests, and requires a custom header and JSON for
+Open **http://wayoffmars.localhost:3000** in desktop Chrome. The original
+http://localhost:3000 and http://127.0.0.1:3000 addresses still work. Chrome
+resolves this `.localhost` name to loopback itself; no domain purchase, hosts-file
+edit, proxy, certificate, or system DNS change is needed. Other tools using the
+Mac system resolver may not resolve the name; use 127.0.0.1 for those tools.
+
+Start with the same `npm run dev` command (restart an already-running app after
+updating). For production, rebuild with `npm run build` before `npm start`.
+The app must be running to use the address. Native scripts still bind to
+127.0.0.1; production forces loopback. The API allows only the exact local
+hostnames above and IPv6 loopback, validates the exact Origin, rejects cross-site
+requests, and requires a custom header and JSON for
 mutations. Do not expose it through a proxy, tunnel, LAN binding or port forward.
 There is no authentication against other processes/users on this Mac.
+
+The hostname does not change the server's SQLite/asset directory or migrate data.
+Saved library items are shared across these addresses when connected to the same
+server. Browser state is separate for each origin (scheme, hostname and port):
+finish/save note and image drafts at the old address before switching. Old
+IndexedDB libraries remain at their original address; perform any explicit legacy
+import there first. Browser-local preferences and temporary previews do not carry
+over. Chrome's installed-font permission belongs to the new origin too: use
+**Browse installed fonts** to request it if needed. No permission is granted by
+this change, and saved font files remain available without that permission.
 
 ## Font previews and installed fonts
 
@@ -32,8 +51,8 @@ tracking, leading, alignment and colors without changing text or size.
 
 **Browse installed fonts** optionally requests the browser's Local Font Access
 permission from a click. Desktop Chrome supports this API in a secure context
-(including loopback localhost/127.0.0.1). Safari, Firefox and unsupported browsers
-retain the file-import workflow. Denying or dismissing permission does not block
+(including wayoffmars.localhost, localhost and 127.0.0.1). Safari, Firefox and
+unsupported browsers retain the file-import workflow. Denying or dismissing permission does not block
 uploaded fonts. Browser site settings can revoke a remembered font permission.
 
 The returned font list remains in tab memory. Select a face and choose **Preview

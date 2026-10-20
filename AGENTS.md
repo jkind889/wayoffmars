@@ -47,7 +47,10 @@ Checks: `npm run lint`, `npm run typecheck`, `npm test` (installed Mac Google
 Chrome). `predev`/`prebuild` prepare local PDF.js resources. Read the installed
 Next.js guides above before changing framework code.
 
-Native dev/start bind to loopback. Default persistent data is
+Native dev/start bind to loopback. Chrome can use `wayoffmars.localhost:3000`;
+allow only that exact alias alongside existing loopback hosts. Hostnames do not
+change server storage; browser permissions/drafts remain origin-specific.
+Default persistent data is
 `~/Library/Application Support/wayoffmars`: `library.sqlite`, WAL/SHM files and
 `assets/<sha256>`. Use an absolute `WAYOFFMARS_DATA_DIR` for alternate libraries.
 Never use, modify or import the real user library for tests. Playwright creates
