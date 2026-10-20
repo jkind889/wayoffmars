@@ -300,7 +300,7 @@ warning but is not recovered after closing the tab. Missing/damaged files show
 a preview error; restore a verified backup for recovery. Deletion retains
 unreferenced asset bytes under the existing backup-safe retention policy.
 Full-library backups include images and their metadata. Schema 1 libraries
-migrate transactionally to schema 6 on first use; older backups remain restorable.
+migrate transactionally to schema 7 on first use; older backups remain restorable.
 
 On a saved note, choose **Manage linked images**, select an imported image and
 choose **Link image**. Image details show **Linked notes**, with controls to link
@@ -311,7 +311,7 @@ a note or image removes its links through SQLite foreign keys while keeping the
 other record. Stale link actions are rejected if either record changed.
 
 Full-library backup/restore includes references alongside image metadata and
-original bytes. Schema 2 image libraries migrate to schema 6 without changing
+original bytes. Schema 2 image libraries migrate to schema 7 without changing
 records or assets. There is no OCR, image AI, annotation or moodboard behavior.
 
 Image/link checks include all three raster formats, original-byte equality,
@@ -324,6 +324,40 @@ previews and direct-reference navigation. The real user library was not used
 for these checks. Safari and Docker runtime remain unverified.
 
 
+## Textures
+
+Open **Textures** to browse reusable texture images. **Import texture** uses the
+same still PNG/JPEG/WebP validation, original storage and lazy thumbnails as
+Images. New imports are marked as textures. Renamed duplicate files keep their
+existing metadata and classification; **Review saved image** opens that record
+for an explicit change.
+
+To reuse an existing image, choose **Existing image**, **Review existing image**,
+check **Use as texture**, then **Save image details**. The same checkbox is also
+available in Images. Uncheck and save to remove it from Textures while retaining
+the image, original, tags, links and collection memberships. All texture images
+remain visible in Images. Existing libraries are never automatically classified.
+
+Filter textures by title/filename/description, shared image tag, and collection.
+Image details provide **Manage shared tags**, controls to add/remove membership
+in existing collections, and **Download original** for the exact saved bytes.
+Membership additions append; organize their order or create a collection on
+**Collections**. Save image edits before changing membership. Collection tags
+apply to the collection itself and are independent of member image tags.
+
+**Reload textures/images** refreshes changes from other tabs and asks before
+discarding unsaved metadata. Classification uses the image's revision checks;
+collection changes use the collection's revision checks. Classification is an
+optional boolean in existing image metadata, needs no asset migration, and
+survives full-library backup/restore. No image copies, texture editor, procedural
+generator, animation or additional file formats are introduced.
+
+Checks use fresh temporary libraries and Mac Chrome at 1280×900 and 390×844:
+imports/duplicates, reversible classification, validation and stale writes,
+original download byte equality, thumbnail reuse, tag/collection filters,
+ordered membership preservation, failed/cancelled flows, keyboard focus, and
+backup/restore. Safari and Docker runtime remain unverified.
+
 ## Shared tags
 
 Open **Tags**, or choose **Manage shared tags** on a note, image detail or PDF.
@@ -335,8 +369,8 @@ closing the tab. Use **Cancel**, then **Reload tags** after a conflict.
 
 Filter by one or more tags, item type, and title/filename keywords. Every selected
 tag and keyword must match. **Clear filters** restores all items. Results link
-to their original note, image or PDF; this view does not search body/page text.
-Fonts are not included. Explicit note/image links remain independent.
+to their original note, image, PDF or collection; this view does not search
+body/page text. Fonts are not included. Explicit note/image links remain independent.
 
 Labels are trimmed and compared using the same lowercase convention as note
 tags. Duplicate assignments collapse; the first saved spelling becomes the shared
@@ -358,7 +392,7 @@ cannot overwrite them. Deleting an item cascades only its assignments; removing
 a tag keeps the item and its explicit links.
 
 After updating, restart the app to load all new handlers (rebuild first for a
-production launch). Older app versions cannot open a schema 6 library. Shared-tag
+production launch). Older app versions cannot open a schema 7 library. Shared-tag
 QA uses fresh temporary libraries and a separate `.next-check` build directory, preserving the normal
 dev server. Coverage includes migration/legacy backup,
 normalization, repeated import, conflicts, deletion, keyboard/focus, combined
@@ -388,15 +422,26 @@ it. Clear/removal releases that copy. Shortlists reset when leaving the page.
 
 Open **Collections**, name a project, then add existing notes, images, PDFs or
 saved fonts. Type/title filters narrow the candidate list. Membership changes and
-**Move up/down** save immediately; they also save any edited collection name.
+**Move up/down** save immediately; they also save edited collection names and tags.
 Previews and source links use existing records and assets, without binary copies.
 The limit is 100 collections, each containing up to 100 distinct items.
+
+Use the existing tag autocomplete in a collection and **Save collection details**
+to save its name/tags. Pending tag text must be added or cleared first. Tags use
+the same vocabulary as notes, images and PDFs; they do not tag collection
+members. The Collections page filters by name, tag and untagged status. An open
+collection remains available even when it falls outside the filters. Collections
+also appear in the shared **Tags** view with direct links back to their editor.
 
 Removing membership or deleting a collection keeps all source items. Deleting a
 source removes its memberships and changes affected collection revisions; use
 **Reload collections** to see external changes or recover from a stale edit.
-Name edits have navigation protection but are not recovered after closing the
-tab. Schema 5 adds ordered, foreign-key-backed references transactionally.
+Name/tag edits have navigation protection but are not recovered after closing
+the tab. Schema 5 added ordered references; schema 7 adds collection tag
+assignments with cascading foreign keys to the existing collections and shared
+vocabulary. Migration preserves member order, revisions, existing assignments
+and import receipts; repeated opens are idempotent. Backups from schemas 1–7
+remain supported. Restart after updating; rebuild first for production.
 
 ## PDF excerpts in notes
 

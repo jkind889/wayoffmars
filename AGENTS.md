@@ -15,7 +15,8 @@ and PDFs.
 There are no accounts, cloud uploads or hosted services. Preserve the user's
 favicon and unrelated working-tree edits. Images, image/note references, shared
 tags and mixed views for notes/images/PDFs, font/image comparisons, ordered
-project collections and cited PDF excerpts are implemented.
+project collections with shared tags, a Textures view of classified images, and
+cited PDF excerpts are implemented.
 OCR, annotation, moodboards, font tagging and image AI are outside that scope.
 
 ## Code map
@@ -26,11 +27,11 @@ OCR, annotation, moodboards, font tagging and image AI are outside that scope.
   `local-client.ts`: same-origin API clients. Search runs in the browser.
 - `src/lib/server/repository.ts`: validated mutations and revision checks;
   `database.mjs`: SQLite, migrations and content-addressed immutable assets.
-  `images.ts`: raster validation/metadata; `image-thumbnails.ts`: disposable,
-  bounded preview cache with source verification; `image-links.ts`: revision-checked
+  `images.ts`: raster validation/metadata and reversible texture classification;
+  `image-thumbnails.ts`: disposable, bounded preview cache with source verification; `image-links.ts`: revision-checked
   references backed by cascading SQLite foreign keys. `tags.ts` manages shared
-  vocabulary/assignments (schema 4); note writes synchronize assignments while
-  preserving legacy import receipts. `collections.ts` manages ordered references
+  vocabulary/assignments (schema 4), including collection tags (schema 7); note
+  writes synchronize assignments while preserving legacy import receipts. `collections.ts` manages ordered references
   (schema 5); `excerpts.ts` validates PDF quotations and revision-checked note
   attachments (schema 6), retaining citation snapshots after source deletion.
   `http.ts`: loopback Host/Origin protections and bounded request reading.
