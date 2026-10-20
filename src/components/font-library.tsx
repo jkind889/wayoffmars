@@ -5,7 +5,8 @@ import { loadFontBytes, readFont } from "@/lib/font-loader";
 import { fontIdentity, readSavedFonts, removeSavedFont, saveFont, storageError, validateSavedFont, type SavedFont } from "@/lib/font-storage";
 import { createBackup, readBackup, readBackupFont } from "@/lib/font-backup";
 import { localRequest } from "@/lib/local-client";
-import { Comparison, CompareChoice, useShortlist } from "./comparison";
+import { CompareChoice, useShortlist } from "./comparison";
+import { FontComparisonPanel } from "./font-comparison-panel";
 import { InstalledFonts } from "./installed-fonts";
 import { DEFAULT_FONT_APPEARANCE, FontPreviewControls, specimenAppearance } from "./font-preview-controls";
 
@@ -37,6 +38,8 @@ export function FontLibrary() {
   const loadedFaces = useRef(new Map<string, FontFace>());
   const generation = useRef(0);
   const shortlist = useShortlist();
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const comparisonOpener = useRef<HTMLButtonElement>(null);
   const [query, setQuery] = useState('');
   const [missing, setMissing] = useState<string[]>([]);
   const [installedComparisons, setInstalledComparisons] = useState<{ id: string; name: string; family: string }[]>([]);
@@ -301,10 +304,12 @@ export function FontLibrary() {
         </p>
       </div>
 
-      <section className="library font-library" aria-labelledby="library-heading">
+      <section className={`library font-library${comparisonOpen ? ' has-comparison' : ''}`} aria-labelledby="library-heading">
         <div className="library-heading">
           <h2 id="library-heading">Library</h2>
           <span className="library-count">{readyCount} {readyCount === 1 ? "font" : "fonts"}</span>
+          <button ref={comparisonOpener} type="button" className="secondary-button" aria-expanded={comparisonOpen} aria-controls="font-comparison-panel"
+            onClick={() => setComparisonOpen(previous => !previous)}>Font comparison ({shortlist.ids.length}/4)</button>
         </div>
         <div className="library-tools">
           <label className="preview-text">Preview text
@@ -324,20 +329,32 @@ export function FontLibrary() {
           }} />
           <p className="storage-note">Saved on this Mac. Use Local library to import older browser data and back up the complete library.</p>
         </div>
-        <Comparison kind="fonts" count={shortlist.ids.length} onClear={shortlist.clear} onOpen={async () => {
+        <FontComparisonPanel open={comparisonOpen} count={shortlist.ids.length} onClear={shortlist.clear} onClose={() => {
+          setComparisonOpen(false);
+          comparisonOpener.current?.focus();
+        }} onCompare={async () => {
           const saved = await localRequest<{ id: string }[]>('fonts');
           setMissing(fonts.filter(font => font.status === 'ready' && font.saved && !saved.some(item => item.id === font.id)).map(font => font.id));
         }}>
-          <label>Comparison text<textarea maxLength={5000} value={previewText} onChange={event => setPreviewText(event.target.value)} /></label>
-          <label>Comparison size: {previewSize}px<input type="range" min="12" max="96" value={previewSize} onChange={event => setPreviewSize(Number(event.target.value))} /></label>
-          <FontPreviewControls value={appearance} onChange={setAppearance} />
+          <details className="comparison-settings">
+            <summary>Comparison settings</summary>
+            <label className="preview-text">Comparison text<textarea maxLength={5000} value={previewText} onChange={event => setPreviewText(event.target.value)} /></label>
+            <label className="preview-size">Comparison size: {previewSize}px<input type="range" min="12" max="96" value={previewSize} onChange={event => setPreviewSize(Number(event.target.value))} /></label>
+            <FontPreviewControls value={appearance} onChange={setAppearance} />
+          </details>
           <div className="comparison-grid">{shortlist.ids.map(id => {
             const installed = installedComparisons.find(item => item.id === id);
             const saved = fonts.find(item => item.id === id);
             const font = installed ?? (saved?.status === 'ready' && !missing.includes(id) ? saved : null);
-            return <article key={id} className="comparison-card"><h3>{font?.name ?? 'Font no longer available'}</h3><p className="storage-note">{installed ? 'Installed font · temporary comparison' : saved?.status === 'ready' && saved.saved ? 'Saved on this Mac' : 'Preview only'}</p>{font ? <p className="font-sample" style={{ ...previewStyle, fontFamily: `"${font.family}"` }}>{previewText || ' '}</p> : <p>This font was removed or could not be loaded.</p>}<button type="button" className="secondary-button" onClick={() => shortlist.toggle(id)}>Remove from comparison</button></article>;
+            return <article key={id} className="comparison-card"><h3>{font?.name ?? 'Font no longer available'}</h3><p className="storage-note">{installed ? 'Installed font · temporary comparison' : saved?.status === 'ready' && saved.saved ? 'Saved on this Mac' : 'Preview only'}</p>{font ? <p className="font-sample" style={{ ...previewStyle, fontFamily: `"${font.family}"` }}>{previewText || ' '}</p> : <p>This font was removed or could not be loaded.</p>}<button type="button" className="secondary-button" onClick={event => {
+              const card = event.currentTarget.closest('article');
+              const next = (card?.nextElementSibling ?? card?.previousElementSibling)?.querySelector('button');
+              (next ?? document.getElementById('font-comparison-heading'))?.focus();
+              shortlist.toggle(id);
+            }}>Remove from comparison</button></article>;
           })}</div>
-        </Comparison>
+        </FontComparisonPanel>
+        <div className="font-results">
         <label>Filter saved fonts<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
         <div className="font-specimens">
         <InstalledFonts disabled={disabled} text={previewText} style={previewStyle} onSave={saveInstalledFont} onCompare={shortlistInstalled} comparisonFull={shortlist.ids.length >= 4} comparisonIds={shortlist.ids} />
@@ -366,6 +383,7 @@ export function FontLibrary() {
             ))}
           </ul>
         )}
+        </div>
         </div>
       </section>
     </>

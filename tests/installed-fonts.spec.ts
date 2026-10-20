@@ -241,6 +241,7 @@ test('shared form boundaries remain distinguishable on both app surfaces', async
 test('installed comparison retains an explicit temporary copy and releases it on clear', async ({ page, request }) => {
   await mockFonts(page); await ready(page); await preview(page);
   await page.getByRole('button', { name: 'Shortlist installed font' }).click();
+  await page.getByRole('button', { name: 'Font comparison (1/4)', exact: true }).click();
   await expect(page.getByText('1 of 4 fonts shortlisted.', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Clear installed preview' }).click();
   expect(await page.evaluate(() => Array.from(document.fonts).some(face => face.family.startsWith('compare-')))).toBe(true);
