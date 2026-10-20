@@ -12,7 +12,7 @@ export type LocalFontData = {
 type FontWindow = Window & { queryLocalFonts?: () => Promise<LocalFontData[]> };
 
 export function localFontAvailability(): string | null {
-  if (!window.isSecureContext) return 'Installed-font browsing needs a secure context. Open wayoffmars at localhost or 127.0.0.1. You can still choose font files.';
+  if (!window.isSecureContext) return 'Installed-font browsing needs a secure context. Open wayoffmars at wayoffmars.localhost, localhost or 127.0.0.1. You can still choose font files.';
   if (typeof (window as FontWindow).queryLocalFonts !== 'function') return 'This browser does not support installed-font browsing. Use desktop Chrome, or choose font files here.';
   return null;
 }
@@ -27,7 +27,7 @@ export function queryInstalledFonts(): Promise<LocalFontData[]> {
 export function localFontError(error: unknown): string {
   if (error instanceof DOMException) {
     if (error.name === 'NotAllowedError' || error.name === 'AbortError') return 'Font access was not granted or was canceled. You can retry Browse installed fonts or choose font files.';
-    if (error.name === 'SecurityError') return 'The browser blocked font access. Retry from Browse installed fonts at localhost or 127.0.0.1, or choose font files.';
+    if (error.name === 'SecurityError') return 'The browser blocked font access. Retry from Browse installed fonts at wayoffmars.localhost, localhost or 127.0.0.1, or choose font files.';
     if (error.name === 'NotFoundError') return 'This installed font is no longer available. Browse installed fonts again, or choose its font file.';
   }
   return error instanceof Error ? error.message : 'This installed font could not be read. Browse installed fonts again, or choose its font file.';

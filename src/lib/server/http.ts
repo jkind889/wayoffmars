@@ -1,7 +1,8 @@
 import 'server-only';
 export function guard(request: Request, mutation = false) {
   const host = request.headers.get('host') || '';
-  if (!/^(localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/.test(host)) throw new Error('Local access only: invalid Host.');
+  // Keep this an exact local allowlist: no wildcard .localhost hosts or forwarded-host trust.
+  if (!/^(wayoffmars\.localhost|localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/.test(host)) throw new Error('Local access only: invalid Host.');
   const origin = request.headers.get('origin');
   if (origin && origin !== `${new URL(request.url).protocol}//${host}`) throw new Error('Local access only: invalid Origin.');
   if (request.headers.get('sec-fetch-site') === 'cross-site') throw new Error('Cross-site access is not allowed.');
