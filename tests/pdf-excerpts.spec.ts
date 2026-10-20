@@ -43,6 +43,7 @@ test('search excerpt creates a note; keyboard selection, draft recovery, existin
   await page.getByLabel('Search notes and PDFs', { exact: true }).fill('useful contrast');
   await expect(card).toBeVisible();
   await page.getByRole('button', { name: 'Clear search' }).click();
+  await card.getByRole('button', { name: 'Source reading', exact: true }).click();
   await card.getByRole('link', { name: 'Open cited page 1' }).click();
   await expect(page).toHaveURL(new RegExp(`/pdf/${pdf.id}\\?page=1`));
   await expect(page.getByRole('img', { name: 'Original PDF, physical page 1' })).toBeVisible();
@@ -89,6 +90,7 @@ test('legacy text-only PDF capture survives missing originals and deleted source
   await expect(page.locator('blockquote')).toHaveText('and type');
   await page.getByLabel('Search notes and PDFs', { exact: true }).fill('and type');
   await expect(page.getByRole('article', { name: 'Color study', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Color study', exact: true }).click();
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Remove excerpt', exact: true }).click();
   await expect(page.getByLabel('Search notes and PDFs', { exact: true })).toBeFocused();

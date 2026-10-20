@@ -13,6 +13,7 @@ test('link and unlink from both views, navigate direct references and retain bot
   await request.post('/api/library?kind=notes', { headers, data: { action: 'write', note, id: note.id, expectedRevision: null } });
   await page.goto('/notes');
   const card = page.getByRole('article', { name: note.title });
+  await card.getByRole('button', { name: note.title, exact: true }).click();
   await card.getByRole('button', { name: 'Manage linked images' }).click();
   await card.getByLabel('Choose image').selectOption(image.id);
   await card.getByRole('button', { name: 'Link image', exact: true }).click();
@@ -79,6 +80,7 @@ test('failed link writes remain retryable and stale views can refresh without lo
   await page.getByRole('button', { name: 'Edit Color study' }).click();
   await page.getByLabel('Title', { exact: true }).fill('Unsaved draft');
   const card = page.getByRole('article', { name: note.title }), links = card.getByRole('region', { name: 'Linked images' });
+  await card.getByRole('button', { name: note.title, exact: true }).click();
   await card.getByRole('button', { name: 'Manage linked images' }).click();
   await links.getByLabel('Choose image').selectOption(image.id);
   await page.route('**/api/image-links', async route => route.request().method() === 'POST' ? route.fulfill({ status: 503, json: { error: 'Disk write failed. Retry.' } }) : route.continue());

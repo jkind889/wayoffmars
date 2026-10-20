@@ -140,8 +140,12 @@ test("stale tabs cannot overwrite or delete newer notes and can save edits as a 
   await other.getByRole("button", { name: "Save as new note" }).click();
   await expect(other.getByRole("article")).toHaveCount(2);
   await page.reload(); await expect(page.getByRole("article")).toHaveCount(2);
+  // Bodies are now read on demand; opening one keeps the other collapsed.
+  await page.getByRole("button", { name: "Editorial rhythm", exact: true }).first().click();
+  await expect(page.locator(".note-body")).toContainText(["Other tab draft"]);
+  await page.getByRole("button", { name: "Editorial rhythm", exact: true }).last().click();
   await expect(page.getByRole("article").filter({ hasText: "Newest committed content" })).toHaveCount(1);
-  await expect(page.getByRole("article").filter({ hasText: "Other tab draft" })).toHaveCount(1);
+  await expect(page.getByRole("article").filter({ hasText: "Other tab draft" })).toHaveCount(0);
 });
 
 test("invalid source is not saved; unavailable draft storage keeps edits visible", async ({ page }) => {

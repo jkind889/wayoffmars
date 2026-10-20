@@ -13,15 +13,9 @@ function HighlightedText({ text, terms }: { text: string; terms: string[] }) {
   return highlightText(text, terms).map((part, index) => part.match ? <mark key={index}>{part.text}</mark> : part.text);
 }
 
-function FullNote({ text, terms }: { text: string; terms: string[] }) {
-  const [open, setOpen] = useState(false);
-  return <details className="note-full-text" onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary>Read full note</summary>
-    {open && <p className="note-body"><HighlightedText text={text} terms={terms} /></p>}
-  </details>;
-}
-
 const NOTES_PER_PAGE = 25;
+const VIEW_KEY = 'wayoffmars-notes-view-v1';
+type NotesView = 'list' | 'grid';
 type ResultPage = { query: string; index?: number; noteId?: string };
 function hashNote() {
   if (!window.location.hash.startsWith('#note-')) return null;
@@ -34,6 +28,8 @@ const dirtyDraft = (draft: Draft | null) => draft !== null && JSON.stringify(dra
 const sortNotes = (notes: SavedNote[]) => [...notes].sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
 
 export function NoteLibrary() {
+  const [view, setView] = useState<NotesView>('list');
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [resultPage, setResultPage] = useState<ResultPage>({ query: '', index: 0 });
   const resultHeading = useRef<HTMLHeadingElement>(null);
@@ -61,8 +57,8 @@ export function NoteLibrary() {
   const requestedIndex = resultPage.noteId ? Math.floor(results.findIndex(({ note }) => note.id === resultPage.noteId) / NOTES_PER_PAGE) : resultPage.index ?? 0;
   const pageIndex = resultPage.query === query ? Math.max(0, Math.min(requestedIndex, pageCount - 1)) : 0;
   const visibleResults = results.slice(pageIndex * NOTES_PER_PAGE, (pageIndex + 1) * NOTES_PER_PAGE);
-  function changeQuery(value: string) { setQuery(value); setResultPage({ query: value, index: 0 }); }
-  function goToPage(index: number) { pageFocus.current = true; setResultPage({ query, index }); }
+  function changeQuery(value: string) { setQuery(value); setResultPage({ query: value, index: 0 }); setOpenNoteId(null); }
+  function goToPage(index: number) { pageFocus.current = true; setResultPage({ query, index }); setOpenNoteId(null); }
   function pagination(bottom = false) {
     return pageCount > 1 && <nav className="note-pagination" aria-label={bottom ? 'Note result pages, bottom' : 'Note result pages'}>
       <button type="button" className="secondary-button" disabled={pageIndex === 0} onClick={() => goToPage(pageIndex - 1)}>Previous notes</button>
@@ -73,10 +69,18 @@ export function NoteLibrary() {
     </nav>;
   }
   function clearSearch() { changeQuery(""); searchRef.current?.focus(); }
+  function changeView(next: NotesView) {
+    setView(next);
+    try { localStorage.setItem(VIEW_KEY, next); } catch { /* Layout still works without browser storage. */ }
+  }
+  function toggleNote(id: string) { setOpenNoteId(previous => previous === id ? null : id); }
 
   useEffect(() => {
     let cancelled = false;
     async function restore() {
+      try {
+        if (localStorage.getItem(VIEW_KEY) === 'grid') setView('grid');
+      } catch { /* Default to the list when preferences cannot be read. */ }
       try {
         const raw = sessionStorage.getItem(DRAFT_KEY);
         if (raw) {
@@ -94,7 +98,7 @@ export function NoteLibrary() {
         if (!cancelled) {
           setNotes(sortNotes(valid));
           const target = hashNote();
-          if (target) { setResultPage({ query: '', noteId: target }); excerptFocus.current = target; }
+          if (target) { setResultPage({ query: '', noteId: target }); setOpenNoteId(target); excerptFocus.current = target; }
           setReadError(unreadable ? `${unreadable} unreadable note(s) could not be displayed. Their stored data has been kept.` : "");
         }
       } catch (error) { if (!cancelled) setReadError(`Saved notes could not be read. ${noteStorageError(error)} Reload to retry reading.`); }
@@ -107,7 +111,7 @@ export function NoteLibrary() {
   useEffect(() => {
     const followHash = () => {
       const target = hashNote();
-      if (target) { excerptFocus.current = target; setQuery(''); setResultPage({ query: '', noteId: target }); }
+      if (target) { excerptFocus.current = target; setQuery(''); setResultPage({ query: '', noteId: target }); setOpenNoteId(target); }
     };
     window.addEventListener('hashchange', followHash);
     return () => window.removeEventListener('hashchange', followHash);
@@ -166,6 +170,7 @@ export function NoteLibrary() {
       await writeNote(note, note.id, asCopy ? null : draft.original?.revision ?? null);
       setNotes(previous => sortNotes([...previous.filter(entry => entry.id !== note.id), { ...note, excerpts: asCopy ? [] : draft.original?.excerpts }]));
       setResultPage({ query, noteId: note.id });
+      setOpenNoteId(note.id);
       keepDraft(null); setConflict(false); setStatus(`“${note.title}” saved on this Mac.`); restoreFocus.current = true;
     } catch (error) { setError(`Note could not be saved. ${noteStorageError(error)}`); setConflict(error instanceof NoteConflictError); }
     finally { lock.current = false; setBusy(false); }
@@ -211,24 +216,37 @@ export function NoteLibrary() {
         {query && <button className="secondary-button" type="button" onClick={clearSearch}>Clear search</button>}</div>
       <p className="storage-note" id="note-search-help">Search note titles, bodies, tags, quotations and observations, plus PDF filenames and page text. Every keyword must match within one note or PDF page; capitalization does not matter.</p>
     </div>
-    <div className="library-heading"><h2 ref={resultHeading} tabIndex={-1}>{searching ? "Note results" : "Saved notes"}</h2><span className="library-count" aria-live="polite">{searching ? `${results.length} of ${notes.length} notes` : `${notes.length} ${notes.length === 1 ? "note" : "notes"}`}</span></div>
+    <div className="library-heading"><h2 ref={resultHeading} tabIndex={-1}>{searching ? "Note results" : "Saved notes"}</h2><span className="library-count" aria-live="polite">{searching ? `${results.length} of ${notes.length} notes` : `${notes.length} ${notes.length === 1 ? "note" : "notes"}`}</span>
+      <div className="backup-actions note-view-toggle" role="group" aria-label="Note view">
+        <button type="button" className="secondary-button" aria-pressed={view === 'list'} onClick={() => changeView('list')}>List</button>
+        <button type="button" className="secondary-button" aria-pressed={view === 'grid'} onClick={() => changeView('grid')}>Grid</button>
+      </div>
+    </div>
     {!loading && results.length > NOTES_PER_PAGE && <p className="storage-note" aria-live="polite">Showing {pageIndex * NOTES_PER_PAGE + 1}–{Math.min((pageIndex + 1) * NOTES_PER_PAGE, results.length)} of {results.length} notes. Search covers every saved note.</p>}
     {!loading && pagination()}
     {loading ? <p className="storage-note">Loading your notes…</p> : notes.length === 0 ? <div className="empty-state"><h3>{readError ? "Your notes could not all be loaded" : "Room for your next idea"}</h3><p>{readError ? "Your stored data has been kept. You can still write a new note." : "Write your first note about type, color, layout, or anything that inspires you."}</p></div> :
       results.length === 0 ? <div className="empty-state"><h3>No notes found</h3><p>Try fewer keywords or a different word from your notes.</p><button className="secondary-button" type="button" onClick={clearSearch}>Show all notes</button></div> :
-      <ul className="note-list">{visibleResults.map(({ note, snippets }) => <li key={note.id}><article id={`note-${encodeURIComponent(note.id)}`} className="note-card" tabIndex={-1} aria-label={note.title}>
-        <div className="note-card-heading"><h3><HighlightedText text={note.title} terms={terms} /></h3><div className="backup-actions">
+      <ul className={`note-list notes-results notes-view-${view}`}>{visibleResults.map(({ note, snippets }) => <li key={note.id} className={openNoteId === note.id ? 'is-open' : undefined}><article id={`note-${encodeURIComponent(note.id)}`} className="note-card" tabIndex={-1} aria-label={note.title}>
+        <div className="note-card-heading note-summary">
+          <h3><button type="button" className="note-title-button" aria-expanded={openNoteId === note.id} aria-controls={`note-detail-${encodeURIComponent(note.id)}`} onClick={() => toggleNote(note.id)}><HighlightedText text={note.title} terms={terms} /></button></h3>
+          {note.tags.length > 0 ? <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul> : <span className="storage-note">No tags</span>}
+          <div className="backup-actions">
           <button className="secondary-button" disabled={busy} onClick={() => edit(note)} aria-label={`Edit ${note.title}`}>Edit</button>
           <button className="secondary-button" disabled={busy} onClick={() => void remove(note)} aria-label={`Delete ${note.title}`}>Delete</button></div></div>
-        {searching ? <>
-          <div className="note-snippets">{snippets.map((snippet, index) => <p key={index}><HighlightedText text={snippet} terms={terms} /></p>)}</div>
-          <FullNote text={note.body} terms={terms} />
-        </> : <p className="note-body">{note.body}</p>}
-        <NoteExcerpts note={note} disabled={busy} onChanged={updated => { excerptFocus.current = updated.id; setResultPage({ query, noteId: updated.id }); setNotes(previous => sortNotes(previous.map(item => item.id === updated.id ? updated : item))); }} />
-        {note.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul>}
-        {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
-        <p><a href={`/tags?kind=notes&id=${encodeURIComponent(note.id)}`}>Manage shared tags</a></p>
-        <ImageNoteLinks key={`${note.id}:${note.revision}`} kind="notes" id={note.id} disabled={busy} />
+        {searching ? <div className="note-snippets">{snippets.map((snippet, index) => <p key={index}><HighlightedText text={snippet} terms={terms} /></p>)}</div>
+          : view === 'grid' && openNoteId !== note.id && <p className="note-preview">{note.body.slice(0, 240).replace(/[\uD800-\uDBFF]$/, '')}{note.body.length > 240 ? '…' : ''}</p>}
+        <div className="note-full-text">
+          {searching && <button type="button" className="note-read-button" aria-expanded={openNoteId === note.id} aria-controls={`note-detail-${encodeURIComponent(note.id)}`} onClick={() => toggleNote(note.id)}>Read full note</button>}
+          <div id={`note-detail-${encodeURIComponent(note.id)}`} hidden={openNoteId !== note.id} className="note-detail">
+            {openNoteId === note.id && <>
+              <p className="note-body"><HighlightedText text={note.body} terms={terms} /></p>
+              <NoteExcerpts note={note} disabled={busy} onChanged={updated => { excerptFocus.current = updated.id; setResultPage({ query, noteId: updated.id }); setNotes(previous => sortNotes(previous.map(item => item.id === updated.id ? updated : item))); }} />
+              {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
+              <p><a href={`/tags?kind=notes&id=${encodeURIComponent(note.id)}`}>Manage shared tags</a></p>
+              <ImageNoteLinks key={`${note.id}:${note.revision}`} kind="notes" id={note.id} disabled={busy} />
+            </>}
+          </div>
+        </div>
       </article></li>)}</ul>}
     {!loading && pagination(true)}
     </section>
