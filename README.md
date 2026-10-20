@@ -452,7 +452,12 @@ it. Clear/removal releases that copy. Shortlists reset when leaving the page.
 
 ## Project collections
 
-Open **Collections**, name a project, then add existing notes, images, PDFs or
+Open **Collections** to browse a responsive grid of project cards with names,
+tags and item counts. Select a card to open its contents and editing controls;
+**Close collection** returns focus to its card. **New collection** opens a name
+dialog: Enter creates it and opens its contents, while Cancel, Close or Escape
+returns to the button and keeps the name draft for this visit. Errors keep the
+dialog open for correction or retry. Then add existing notes, images, PDFs or
 saved fonts. Type/title filters narrow the candidate list. Membership changes and
 **Move up/down** save immediately; they also save edited collection names and tags.
 Previews and source links use existing records and assets, without binary copies.
