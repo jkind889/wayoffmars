@@ -280,30 +280,6 @@ export function FontLibrary() {
 
   return (
     <>
-      <section aria-label="Select font files" className={`drop-zone${isDragging ? " is-dragging" : ""}`}
-        onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(event) => {
-          event.preventDefault(); setIsDragging(false);
-          if (event.dataTransfer.files.length) void selectFiles(Array.from(event.dataTransfer.files));
-        }}>
-        <h2>Drop font files here</h2>
-        <p className="file-formats">TTF, OTF, WOFF and WOFF2</p>
-        <input ref={inputRef} type="file" accept=".ttf,.otf,.woff,.woff2" multiple disabled={disabled} hidden aria-label="Choose font files"
-          onChange={(event) => {
-            if (event.currentTarget.files?.length) void selectFiles(Array.from(event.currentTarget.files));
-            event.currentTarget.value = "";
-          }} />
-        <button type="button" className="primary-button" disabled={disabled} aria-describedby="selection-note" onClick={() => inputRef.current?.click()}>Choose font files</button>
-      </section>
-
-      <div className="selection-feedback" role="status" aria-atomic="true">
-        <p id="selection-note" className="selection-note">
-          {isRestoring ? "Loading saved fonts…" : fonts.length > 0
-            ? `${readyCount} ${readyCount === 1 ? "font" : "fonts"} ready to preview.${loadingCount ? ` ${loadingCount} loading.` : ""}${errorCount ? ` ${errorCount} could not be loaded.` : ""} Saved fonts stay on this Mac.`
-            : "Fonts are saved on this Mac. Nothing leaves this Mac."}
-          {storageMessage ? ` ${storageMessage}` : ""}{importMessage ? ` ${importMessage}` : ""}
-        </p>
-      </div>
-
       <section className={`library font-library${comparisonOpen ? ' has-comparison' : ''}`} aria-labelledby="library-heading">
         <div className="library-heading">
           <h2 id="library-heading">Library</h2>
@@ -386,6 +362,30 @@ export function FontLibrary() {
         </div>
         </div>
       </section>
+
+      <section aria-label="Select font files" className={`drop-zone${isDragging ? " is-dragging" : ""}`}
+        onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={(event) => {
+          event.preventDefault(); setIsDragging(false);
+          if (event.dataTransfer.files.length) void selectFiles(Array.from(event.dataTransfer.files));
+        }}>
+        <h2>Drop font files here</h2>
+        <p className="file-formats">TTF, OTF, WOFF and WOFF2</p>
+        <input ref={inputRef} type="file" accept=".ttf,.otf,.woff,.woff2" multiple disabled={disabled} hidden aria-label="Choose font files"
+          onChange={(event) => {
+            if (event.currentTarget.files?.length) void selectFiles(Array.from(event.currentTarget.files));
+            event.currentTarget.value = "";
+          }} />
+        <button type="button" className="primary-button" disabled={disabled} aria-describedby="selection-note" onClick={() => inputRef.current?.click()}>Choose font files</button>
+      </section>
+
+      <div className="selection-feedback" role="status" aria-atomic="true">
+        <p id="selection-note" className="selection-note">
+          {isRestoring ? "Loading saved fonts…" : fonts.length > 0
+            ? `${readyCount} ${readyCount === 1 ? "font" : "fonts"} ready to preview.${loadingCount ? ` ${loadingCount} loading.` : ""}${errorCount ? ` ${errorCount} could not be loaded.` : ""} Saved fonts stay on this Mac.`
+            : "Fonts are saved on this Mac. Nothing leaves this Mac."}
+          {storageMessage ? ` ${storageMessage}` : ""}{importMessage ? ` ${importMessage}` : ""}
+        </p>
+      </div>
     </>
   );
 }
