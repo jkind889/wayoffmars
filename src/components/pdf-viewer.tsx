@@ -86,6 +86,8 @@ export function PdfViewer({ id, initialPage: page }: { id: string; initialPage: 
       <div ref={canvasHost} className="pdf-canvas-host" />
       {rendered && <details className="pdf-page-text"><summary>Text from this original page</summary><p className="pdf-original-text">{text || 'This page has no selectable text.'}</p></details>}
     </>}
+    {/* Full navigation keeps the excerpt editor’s beforeunload draft protection. */}
+    {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
     <p><a href="/notes">Back to Notes</a></p>
   </section>;
 }

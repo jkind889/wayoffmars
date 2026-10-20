@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { EMPTY_NOTE, NOTE_LIMITS, NoteConflictError, makeNote, noteFields, noteStorageError, readNotes, validFields, validateNote, validateSource, writeNote, type NoteFields, type SavedNote } from "@/lib/note-storage";
 
@@ -27,9 +28,25 @@ const DRAFT_KEY = "wayoffmars-note-draft-v1";
 const dirtyDraft = (draft: Draft | null) => draft !== null && JSON.stringify(draft.fields) !== JSON.stringify(draft.original ? noteFields(draft.original) : EMPTY_NOTE);
 const sortNotes = (notes: SavedNote[]) => [...notes].sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
 
-export function NoteLibrary() {
+// Ordinary links preserve the beforeunload protection for unfinished note drafts.
+function listUrl(query: string, page: number, focus?: string) {
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  if (page) params.set('page', String(page));
+  if (focus) params.set('focus', focus);
+  return `/notes${params.size ? `?${params}` : ''}`;
+}
+function detailUrl(id: string, query = '', page = 0) {
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  if (page) params.set('page', String(page));
+  return `/notes/${encodeURIComponent(id)}${params.size ? `?${params}` : ''}`;
+}
+
+export function NoteLibrary({ detailId }: { detailId?: string }) {
+  const router = useRouter();
+  const backRef = useRef<HTMLAnchorElement>(null);
   const [view, setView] = useState<NotesView>('list');
-  const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [resultPage, setResultPage] = useState<ResultPage>({ query: '', index: 0 });
   const resultHeading = useRef<HTMLHeadingElement>(null);
@@ -57,8 +74,11 @@ export function NoteLibrary() {
   const requestedIndex = resultPage.noteId ? Math.floor(results.findIndex(({ note }) => note.id === resultPage.noteId) / NOTES_PER_PAGE) : resultPage.index ?? 0;
   const pageIndex = resultPage.query === query ? Math.max(0, Math.min(requestedIndex, pageCount - 1)) : 0;
   const visibleResults = results.slice(pageIndex * NOTES_PER_PAGE, (pageIndex + 1) * NOTES_PER_PAGE);
-  function changeQuery(value: string) { setQuery(value); setResultPage({ query: value, index: 0 }); setOpenNoteId(null); }
-  function goToPage(index: number) { pageFocus.current = true; setResultPage({ query, index }); setOpenNoteId(null); }
+  function rememberPage(value: string, index: number) {
+    window.history.replaceState(window.history.state, '', listUrl(value, index));
+  }
+  function changeQuery(value: string) { setQuery(value); setResultPage({ query: value, index: 0 }); rememberPage(value, 0); }
+  function goToPage(index: number) { pageFocus.current = true; setResultPage({ query, index }); rememberPage(query, index); }
   function pagination(bottom = false) {
     return pageCount > 1 && <nav className="note-pagination" aria-label={bottom ? 'Note result pages, bottom' : 'Note result pages'}>
       <button type="button" className="secondary-button" disabled={pageIndex === 0} onClick={() => goToPage(pageIndex - 1)}>Previous notes</button>
@@ -73,11 +93,19 @@ export function NoteLibrary() {
     setView(next);
     try { localStorage.setItem(VIEW_KEY, next); } catch { /* Layout still works without browser storage. */ }
   }
-  function toggleNote(id: string) { setOpenNoteId(previous => previous === id ? null : id); }
 
   useEffect(() => {
     let cancelled = false;
     async function restore() {
+      const params = new URLSearchParams(window.location.search);
+      const initialQuery = (params.get('q') ?? '').slice(0, 200);
+      const page = Number(params.get('page') ?? 0);
+      const initialPage = Number.isSafeInteger(page) && page >= 0 ? page : 0;
+      setQuery(initialQuery);
+      setResultPage(detailId && !params.has('page') ? { query: initialQuery, noteId: detailId } : { query: initialQuery, index: initialPage });
+      excerptFocus.current = detailId ?? params.get('focus');
+      const legacyTarget = hashNote();
+      if (legacyTarget) { router.replace(detailUrl(legacyTarget, initialQuery, initialPage)); return; }
       try {
         if (localStorage.getItem(VIEW_KEY) === 'grid') setView('grid');
       } catch { /* Default to the list when preferences cannot be read. */ }
@@ -97,8 +125,6 @@ export function NoteLibrary() {
         for (const record of records) { try { valid.push(validateNote(record)); } catch { unreadable++; } }
         if (!cancelled) {
           setNotes(sortNotes(valid));
-          const target = hashNote();
-          if (target) { setResultPage({ query: '', noteId: target }); setOpenNoteId(target); excerptFocus.current = target; }
           setReadError(unreadable ? `${unreadable} unreadable note(s) could not be displayed. Their stored data has been kept.` : "");
         }
       } catch (error) { if (!cancelled) setReadError(`Saved notes could not be read. ${noteStorageError(error)} Reload to retry reading.`); }
@@ -106,16 +132,16 @@ export function NoteLibrary() {
     }
     void restore();
     return () => { cancelled = true; };
-  }, []);
+  }, [detailId, router]);
 
   useEffect(() => {
     const followHash = () => {
       const target = hashNote();
-      if (target) { excerptFocus.current = target; setQuery(''); setResultPage({ query: '', noteId: target }); setOpenNoteId(target); }
+      if (target) router.replace(detailUrl(target));
     };
     window.addEventListener('hashchange', followHash);
     return () => window.removeEventListener('hashchange', followHash);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (!dirty && !busy) return;
@@ -126,20 +152,25 @@ export function NoteLibrary() {
   useEffect(() => { if (draft?.id) titleRef.current?.focus(); }, [draft?.id]);
 
   useEffect(() => {
-    if (restoreFocus.current && !busy) { newRef.current?.focus(); restoreFocus.current = false; }
+    if (restoreFocus.current && !busy) {
+      if (detailId) (document.getElementById(`note-${encodeURIComponent(detailId)}`) ?? backRef.current)?.focus();
+      else newRef.current?.focus();
+      restoreFocus.current = false;
+    }
   });
 
   useEffect(() => {
     if (loading) return;
     const id = excerptFocus.current;
     if (id !== null) {
-      (document.getElementById(`note-${encodeURIComponent(id)}`) ?? searchRef.current)?.focus();
+      if (draft) titleRef.current?.focus();
+      else (document.getElementById(`note-${encodeURIComponent(id)}`) ?? (detailId ? document.getElementById('missing-note') : resultHeading.current))?.focus();
       excerptFocus.current = null;
     } else if (pageFocus.current) {
       resultHeading.current?.focus();
       pageFocus.current = false;
     }
-  }, [loading, results, pageIndex, resultPage]);
+  }, [loading, results, pageIndex, resultPage, detailId, draft]);
 
   function keepDraft(next: Draft | null) {
     setDraft(next);
@@ -169,8 +200,8 @@ export function NoteLibrary() {
       const note = makeNote(draft.fields, asCopy ? crypto.randomUUID() : draft.id, asCopy ? null : draft.original, draft.original?.tags);
       await writeNote(note, note.id, asCopy ? null : draft.original?.revision ?? null);
       setNotes(previous => sortNotes([...previous.filter(entry => entry.id !== note.id), { ...note, excerpts: asCopy ? [] : draft.original?.excerpts }]));
-      setResultPage({ query, noteId: note.id });
-      setOpenNoteId(note.id);
+      if (!detailId) setResultPage({ query, noteId: note.id });
+      else if (note.id !== detailId) router.push(detailUrl(note.id, query, resultPage.index ?? pageIndex));
       keepDraft(null); setConflict(false); setStatus(`“${note.title}” saved on this Mac.`); restoreFocus.current = true;
     } catch (error) { setError(`Note could not be saved. ${noteStorageError(error)}`); setConflict(error instanceof NoteConflictError); }
     finally { lock.current = false; setBusy(false); }
@@ -189,7 +220,10 @@ export function NoteLibrary() {
     finally { lock.current = false; setBusy(false); }
   }
 
+  const detailNote = notes.find(note => note.id === detailId);
+
   return <div className="notes-workspace"><section aria-label="Design notes">
+    {detailId && <p><a ref={backRef} className="secondary-button" href={listUrl(query, resultPage.index ?? pageIndex, detailId)}>Back to saved notes</a></p>}
     <div className="notes-toolbar"><p className="storage-note">Your writing, saved only on this Mac. Source links are stored without fetching their contents.</p>
       <button ref={newRef} type="button" className="primary-button" disabled={loading || busy} onClick={() => edit()}>New note</button></div>
     {readError && <p className="font-error" role="alert">{readError}</p>}
@@ -210,6 +244,7 @@ export function NoteLibrary() {
       </fieldset>
       <p className="storage-note">Unfinished edits are recovered on refresh in this tab when browser storage is available. Save to keep a note after closing the tab.</p>
     </form>}
+    {!detailId && <>
     <div className="note-search" role="search" aria-label="Search your notes and PDFs">
       <label htmlFor="note-search">Search notes and PDFs</label>
       <div className="search-controls"><input ref={searchRef} id="note-search" type="search" maxLength={200} value={query} placeholder="Try typography, color, or a phrase" aria-describedby="note-search-help" onChange={event => changeQuery(event.target.value)} />
@@ -226,31 +261,31 @@ export function NoteLibrary() {
     {!loading && pagination()}
     {loading ? <p className="storage-note">Loading your notes…</p> : notes.length === 0 ? <div className="empty-state"><h3>{readError ? "Your notes could not all be loaded" : "Room for your next idea"}</h3><p>{readError ? "Your stored data has been kept. You can still write a new note." : "Write your first note about type, color, layout, or anything that inspires you."}</p></div> :
       results.length === 0 ? <div className="empty-state"><h3>No notes found</h3><p>Try fewer keywords or a different word from your notes.</p><button className="secondary-button" type="button" onClick={clearSearch}>Show all notes</button></div> :
-      <ul className={`note-list notes-results notes-view-${view}`}>{visibleResults.map(({ note, snippets }) => <li key={note.id} className={openNoteId === note.id ? 'is-open' : undefined}><article id={`note-${encodeURIComponent(note.id)}`} className="note-card" tabIndex={-1} aria-label={note.title}>
+      <ul className={`note-list notes-results notes-view-${view}`}>{visibleResults.map(({ note, snippets }) => <li key={note.id}><article id={`note-${encodeURIComponent(note.id)}`} className="note-card" tabIndex={-1} aria-label={note.title}>
         <div className="note-card-heading note-summary">
-          <h3><button type="button" className="note-title-button" aria-expanded={openNoteId === note.id} aria-controls={`note-detail-${encodeURIComponent(note.id)}`} onClick={() => toggleNote(note.id)}><HighlightedText text={note.title} terms={terms} /></button></h3>
+          <h3><a className="note-title-button" href={detailUrl(note.id, query, pageIndex)}><HighlightedText text={note.title} terms={terms} /></a></h3>
           {note.tags.length > 0 ? <ul className="note-tags" aria-label="Tags">{note.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul> : <span className="storage-note">No tags</span>}
-          <div className="backup-actions">
-          <button className="secondary-button" disabled={busy} onClick={() => edit(note)} aria-label={`Edit ${note.title}`}>Edit</button>
-          <button className="secondary-button" disabled={busy} onClick={() => void remove(note)} aria-label={`Delete ${note.title}`}>Delete</button></div></div>
-        {searching ? <div className="note-snippets">{snippets.map((snippet, index) => <p key={index}><HighlightedText text={snippet} terms={terms} /></p>)}</div>
-          : view === 'grid' && openNoteId !== note.id && <p className="note-preview">{note.body.slice(0, 240).replace(/[\uD800-\uDBFF]$/, '')}{note.body.length > 240 ? '…' : ''}</p>}
-        <div className="note-full-text">
-          {searching && <button type="button" className="note-read-button" aria-expanded={openNoteId === note.id} aria-controls={`note-detail-${encodeURIComponent(note.id)}`} onClick={() => toggleNote(note.id)}>Read full note</button>}
-          <div id={`note-detail-${encodeURIComponent(note.id)}`} hidden={openNoteId !== note.id} className="note-detail">
-            {openNoteId === note.id && <>
-              <p className="note-body"><HighlightedText text={note.body} terms={terms} /></p>
-              <NoteExcerpts note={note} disabled={busy} onChanged={updated => { excerptFocus.current = updated.id; setResultPage({ query, noteId: updated.id }); setNotes(previous => sortNotes(previous.map(item => item.id === updated.id ? updated : item))); }} />
-              {note.source && <p className="note-source"><span>Source: </span>{note.source}</p>}
-              <p><a href={`/tags?kind=notes&id=${encodeURIComponent(note.id)}`}>Manage shared tags</a></p>
-              <ImageNoteLinks key={`${note.id}:${note.revision}`} kind="notes" id={note.id} disabled={busy} />
-            </>}
-          </div>
         </div>
+        {searching ? <div className="note-snippets">{snippets.map((snippet, index) => <p key={index}><HighlightedText text={snippet} terms={terms} /></p>)}</div>
+          : view === 'grid' && <p className="note-preview">{note.body.slice(0, 240).replace(/[\uD800-\uDBFF]$/, '')}{note.body.length > 240 ? '…' : ''}</p>}
+        {searching && <a className="note-read-button" href={detailUrl(note.id, query, pageIndex)}>Read full note</a>}
       </article></li>)}</ul>}
     {!loading && pagination(true)}
+    </>}
+    {detailId && (loading ? <p className="storage-note">Loading your note…</p> : detailNote ? <article id={`note-${encodeURIComponent(detailNote.id)}`} className="note-card note-full-text" tabIndex={-1} aria-label={detailNote.title}>
+      <div className="note-card-heading"><h2>{detailNote.title}</h2><div className="backup-actions">
+        <button className="secondary-button" disabled={busy} onClick={() => edit(detailNote)} aria-label={`Edit ${detailNote.title}`}>Edit</button>
+        <button className="secondary-button" disabled={busy} onClick={() => void remove(detailNote)} aria-label={`Delete ${detailNote.title}`}>Delete</button>
+      </div></div>
+      {detailNote.tags.length > 0 && <ul className="note-tags" aria-label="Tags">{detailNote.tags.map(tag => <li key={tag}><HighlightedText text={tag} terms={terms} /></li>)}</ul>}
+      <p className="note-body"><HighlightedText text={detailNote.body} terms={terms} /></p>
+      <NoteExcerpts note={detailNote} disabled={busy} onChanged={updated => { excerptFocus.current = updated.id; setNotes(previous => sortNotes(previous.map(item => item.id === updated.id ? updated : item))); }} />
+      {detailNote.source && <p className="note-source"><span>Source: </span>{detailNote.source}</p>}
+      <p><a href={`/tags?kind=notes&id=${encodeURIComponent(detailNote.id)}`}>Manage shared tags</a></p>
+      <ImageNoteLinks key={`${detailNote.id}:${detailNote.revision}`} kind="notes" id={detailNote.id} disabled={busy} />
+    </article> : <div className="empty-state"><h2 id="missing-note" tabIndex={-1}>{readError ? 'This note could not be loaded' : 'Note not found'}</h2><p>{readError ? 'Reload to try again. Your stored notes have been kept.' : 'It may have been deleted. Return to saved notes to choose another.'}</p></div>)}
     </section>
-    <PdfLibrary query={query} />
+    {!detailId && <PdfLibrary query={query} />}
     <p className="storage-note notes-footnote">Notes and PDFs are saved on this Mac. Use Local library for browser imports and full-library backups. Other tabs see changes after refresh.</p>
   </div>;
 }

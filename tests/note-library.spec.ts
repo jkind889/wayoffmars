@@ -1,3 +1,4 @@
+import { openNote } from './helpers/notes';
 import { failStorage } from './fixtures';
 import { test, expect, type Page } from "./fixtures";
 
@@ -37,6 +38,7 @@ test("create, persist, reopen, edit and delete design notes on desktop and mobil
   await expect(page.locator("nextjs-portal").getByText("Runtime Error")).toHaveCount(0);
   await page.screenshot({ path: "/tmp/wayoffmars-notes-desktop.png", fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
+  await openNote(page, "Editorial rhythm");
   await card(page, "Editorial rhythm").getByRole("button", { name: "Edit Editorial rhythm" }).click();
   await page.getByLabel("Title", { exact: true }).fill("Editorial grids");
   await page.getByLabel("Body", { exact: true }).fill("Use generous gutters between columns.");
@@ -59,6 +61,7 @@ test("create, persist, reopen, edit and delete design notes on desktop and mobil
 
 test("unsaved edits survive refresh, protect navigation and require confirmation before replacement", async ({ page }) => {
   await ready(page); await create(page);
+  await openNote(page, "Editorial rhythm");
   await card(page, "Editorial rhythm").getByRole("button", { name: "Edit Editorial rhythm" }).click();
   await page.getByLabel("Body", { exact: true }).fill("Unfinished revision");
   page.once("dialog", dialog => dialog.dismiss());
@@ -69,11 +72,11 @@ test("unsaved edits survive refresh, protect navigation and require confirmation
   await expect(page.getByLabel("Body", { exact: true })).toHaveValue("Unfinished revision");
   page.once("dialog", dialog => dialog.dismiss());
   await page.getByRole("link", { name: "Fonts", exact: true }).click();
-  await expect(page).toHaveURL(/\/notes$/);
+  await expect(page).toHaveURL(/\/notes\//);
   page.once("dialog", dialog => dialog.accept());
   await page.reload();
   await expect(page.getByLabel("Body", { exact: true })).toHaveValue("Unfinished revision");
-  await expect(page.getByRole("status")).toContainText("Recovered");
+  await expect(page.getByRole("status").first()).toContainText("Recovered");
   await page.getByRole("button", { name: "Save note", exact: true }).click();
   await expect(card(page, "Editorial rhythm")).toContainText("Unfinished revision");
   expect(await page.evaluate(() => sessionStorage.getItem("wayoffmars-note-draft-v1"))).toBeNull();
@@ -98,6 +101,7 @@ for (const failure of ["quota", "abort"]) {
 test("failed deletion keeps the saved note", async ({ page }) => {
   await failStorage(page, 'notes', 'delete', 'Local disk operation failed. Retry.');
   await ready(page); await create(page);
+  await openNote(page, "Editorial rhythm");
   page.once("dialog", dialog => dialog.accept());
   await card(page, "Editorial rhythm").getByRole("button", { name: "Delete Editorial rhythm" }).click();
   await expect(page.getByRole("region", { name: "Design notes", exact: true }).getByRole("alert")).toContainText("Note could not be deleted");
@@ -125,8 +129,10 @@ test("read failures do not overwrite unread notes", async ({ page }) => {
 test("stale tabs cannot overwrite or delete newer notes and can save edits as a copy", async ({ page, context }) => {
   await ready(page); await create(page);
   const other = await context.newPage(); await ready(other);
+  await openNote(other, "Editorial rhythm");
   await card(other, "Editorial rhythm").getByRole("button", { name: "Edit Editorial rhythm" }).click();
   await other.getByLabel("Body", { exact: true }).fill("Other tab draft");
+  await openNote(page, "Editorial rhythm");
   await card(page, "Editorial rhythm").getByRole("button", { name: "Edit Editorial rhythm" }).click();
   await page.getByLabel("Body", { exact: true }).fill("Newest committed content");
   await page.getByRole("button", { name: "Save note", exact: true }).click();
@@ -138,14 +144,16 @@ test("stale tabs cannot overwrite or delete newer notes and can save edits as a 
   await card(other, "Editorial rhythm").getByRole("button", { name: "Delete Editorial rhythm" }).click();
   await expect(other.getByRole("region", { name: "Design notes", exact: true }).getByRole("alert")).toContainText("Note could not be deleted");
   await other.getByRole("button", { name: "Save as new note" }).click();
-  await expect(other.getByRole("article")).toHaveCount(2);
-  await page.reload(); await expect(page.getByRole("article")).toHaveCount(2);
-  // Bodies are now read on demand; opening one keeps the other collapsed.
-  await page.getByRole("button", { name: "Editorial rhythm", exact: true }).first().click();
-  await expect(page.locator(".note-body")).toContainText(["Other tab draft"]);
-  await page.getByRole("button", { name: "Editorial rhythm", exact: true }).last().click();
-  await expect(page.getByRole("article").filter({ hasText: "Newest committed content" })).toHaveCount(1);
-  await expect(page.getByRole("article").filter({ hasText: "Other tab draft" })).toHaveCount(0);
+  await expect(other.locator('.note-body')).toHaveText('Other tab draft');
+  await other.getByRole('link', { name: 'Back to saved notes' }).click();
+  await expect(other.getByRole('article')).toHaveCount(2);
+  await page.getByRole('link', { name: 'Back to saved notes' }).click();
+  await expect(page.getByRole('article')).toHaveCount(2);
+  await page.getByRole('link', { name: 'Editorial rhythm', exact: true }).first().click();
+  await expect(page.locator('.note-body')).toHaveText('Other tab draft');
+  await page.getByRole('link', { name: 'Back to saved notes' }).click();
+  await page.getByRole('link', { name: 'Editorial rhythm', exact: true }).last().click();
+  await expect(page.locator('.note-body')).toHaveText('Newest committed content');
 });
 
 test("invalid source is not saved; unavailable draft storage keeps edits visible", async ({ page }) => {
@@ -171,11 +179,12 @@ test("long valid tag input saves and keyboard focus returns after mutations", as
   await create(page, "Many tags", "A large set of short tags", tags);
   await expect(card(page, "Many tags")).toBeVisible();
   await expect(page.getByRole("button", { name: "New note", exact: true })).toBeFocused();
+  await openNote(page, "Many tags");
   await card(page, "Many tags").getByRole("button", { name: "Edit Many tags" }).click();
   await expect(page.getByLabel("Tags Optional")).toHaveValue(tags);
   await page.getByRole("button", { name: "Save note", exact: true }).click();
   page.once("dialog", dialog => dialog.accept());
   await card(page, "Many tags").getByRole("button", { name: "Delete Many tags" }).click();
   await expect(card(page, "Many tags")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "New note", exact: true })).toBeFocused();
+  await expect(page.getByRole("link", { name: "Back to saved notes" })).toBeFocused();
 });

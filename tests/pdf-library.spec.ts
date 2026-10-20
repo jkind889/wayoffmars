@@ -44,7 +44,7 @@ test("local PDF text persists, preserves physical page references, and searches 
   await expect(page.getByRole("article")).toHaveCount(2);
   await expect(pdfRegion(page).locator(".pdf-page-result")).toContainText("Page 1");
   await expect(pdfRegion(page).locator(".note-snippets")).toContainText("Editorial grid and generous gutters.");
-  await expect(page).toHaveURL(/\/notes$/); await expect(page).toHaveTitle("Design notes | wayoffmars");
+  await expect(page).toHaveURL(/\/notes\?q=EDITORIAL\+grid$/); await expect(page).toHaveTitle("Design notes | wayoffmars");
   await expect(page.locator("nextjs-portal").getByText("Runtime Error")).toHaveCount(0);
   await page.screenshot({ path: "/tmp/wayoffmars-pdf-desktop.png", fullPage: true });
   await search(page).fill("kerning");
@@ -136,7 +136,10 @@ test("canceling a stalled worker leaves the UI usable and saves nothing", async 
   await page.getByRole("button", { name: "Cancel import" }).click();
   await expect(pdfRegion(page).getByRole("status")).toContainText("canceled");
   await expect(page.getByRole("button", { name: "Import PDF", exact: true })).toBeEnabled();
-  await page.reload(); await expect(pdfRegion(page).getByText("0 PDFs", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(search(page)).toHaveValue("still responsive");
+  await page.getByRole("button", { name: "Clear search", exact: true }).click();
+  await expect(pdfRegion(page).getByText("0 PDFs", { exact: true })).toBeVisible();
 });
 
 

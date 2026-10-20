@@ -1,3 +1,4 @@
+import { openNote } from './helpers/notes';
 import { test, expect } from './fixtures';
 import { note, library, seed, assign, post } from './helpers/tags';
 
@@ -96,6 +97,7 @@ test('failed and stale tag saves retain edits; cancellation and reload recover s
   await expect(card.getByText('No tags yet')).toBeVisible();
   await card.getByRole('link', { name: note.title }).click();
   await expect(page.getByRole('article', { name: note.title })).toBeInViewport();
+  await openNote(page, note.title);
   await page.getByRole('button', { name: `Edit ${note.title}` }).click();
   await expect(page.getByRole('textbox', { name: /^Tags/ })).toHaveValue('');
 });
@@ -103,6 +105,7 @@ test('failed and stale tag saves retain edits; cancellation and reload recover s
 test('tag links protect unfinished notes and existing note tags stay compatible', async ({ page, request }) => {
   await seed(request);
   await page.goto('/notes');
+  await openNote(page, note.title);
   await page.getByRole('button', { name: `Edit ${note.title}` }).click();
   await page.getByLabel('Title', { exact: true }).fill('Unfinished title');
   page.once('dialog', dialog => dialog.dismiss());
@@ -123,6 +126,7 @@ test('body-only note edits preserve literal comma labels from shared tags', asyn
   const current = (await library(request)).records.find(r => r.kind === 'notes')!;
   expect((await assign(request, current, ['Design, Type', 'Color'])).ok()).toBe(true);
   await page.goto('/notes');
+  await openNote(page, note.title);
   await page.getByRole('button', { name: `Edit ${note.title}` }).click();
   await expect(page.getByRole('textbox', { name: /^Tags/ })).toBeDisabled();
   await page.getByLabel('Body', { exact: true }).fill('Changed body, same tags.');

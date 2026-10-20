@@ -40,10 +40,11 @@ test('search excerpt creates a note; keyboard selection, draft recovery, existin
   await page.getByRole('button', { name: 'Save note', exact: true }).click();
   await expect(card.locator('blockquote')).toHaveText('Color and type');
   await page.reload();
+  await page.getByRole('link', { name: 'Back to saved notes' }).click();
   await page.getByLabel('Search notes and PDFs', { exact: true }).fill('useful contrast');
   await expect(card).toBeVisible();
   await page.getByRole('button', { name: 'Clear search' }).click();
-  await card.getByRole('button', { name: 'Source reading', exact: true }).click();
+  await card.getByRole('link', { name: 'Source reading', exact: true }).click();
   await card.getByRole('link', { name: 'Open cited page 1' }).click();
   await expect(page).toHaveURL(new RegExp(`/pdf/${pdf.id}\\?page=1`));
   await expect(page.getByRole('img', { name: 'Original PDF, physical page 1' })).toBeVisible();
@@ -88,12 +89,13 @@ test('legacy text-only PDF capture survives missing originals and deleted source
   await page.reload();
   await expect(page.getByText('Source PDF deleted.', { exact: false })).toBeVisible();
   await expect(page.locator('blockquote')).toHaveText('and type');
+  await page.getByRole('link', { name: 'Back to saved notes' }).click();
   await page.getByLabel('Search notes and PDFs', { exact: true }).fill('and type');
   await expect(page.getByRole('article', { name: 'Color study', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Color study', exact: true }).click();
+  await page.getByRole('link', { name: 'Color study', exact: true }).click();
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Remove excerpt', exact: true }).click();
-  await expect(page.getByLabel('Search notes and PDFs', { exact: true })).toBeFocused();
+  await expect(page.getByRole('article', { name: 'Color study', exact: true })).toBeFocused();
 });
 
 test('schema5 migration and backups preserve citations, observations and foreign keys', async ({ request }) => {

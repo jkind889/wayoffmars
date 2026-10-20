@@ -83,10 +83,10 @@ test("saved notes are found by title, body and tags after refresh with snippets 
   await expect(page.locator(".note-snippets mark")).toHaveText("Kerning");
   await page.getByText("Read full note", { exact: true }).click();
   await expect(page.locator(".note-full-text .note-body")).toBeVisible();
-  await expect(page).toHaveURL(/\/notes$/); await expect(page).toHaveTitle("Design notes | wayoffmars");
+  await expect(page).toHaveURL(/\/notes\/.*\?q=kerning$/); await expect(page).toHaveTitle("Note | wayoffmars");
   await expect(page.locator("nextjs-portal").getByText("Runtime Error")).toHaveCount(0);
   await page.screenshot({ path: "/tmp/wayoffmars-search-full-note.png", fullPage: true });
-  await page.getByText("Read full note", { exact: true }).click();
+  await page.getByRole("link", { name: "Back to saved notes" }).click();
   await search.fill("typography");
   await expect(page.getByRole("article")).toHaveCount(2);
   await expect(page.locator(".note-tags mark")).toHaveCount(2);
@@ -108,22 +108,30 @@ test("saved notes are found by title, body and tags after refresh with snippets 
   expect(errors).toEqual([]);
 });
 
-test("search keeps drafts and reflects saved edits and deletions immediately", async ({ page }) => {
+test("search keeps new drafts and reflects detail edits and deletions on return", async ({ page }) => {
   await ready(page);
   await create(page, "Color study", "A warm palette", "color");
-  await page.getByRole("button", { name: "Edit Color study" }).click();
-  await page.getByLabel("Body", { exact: true }).fill("A cool palette");
   const search = page.getByRole("searchbox", { name: "Search notes and PDFs", exact: true });
-  await search.fill("no match");
-  await expect(page.getByLabel("Body", { exact: true })).toHaveValue("A cool palette");
-  await search.fill("cool"); await expect(page.getByRole("article")).toHaveCount(0);
-  await page.getByRole("button", { name: "Save note", exact: true }).click();
-  await expect(page.getByRole("article")).toHaveCount(1);
-  await expect(page.locator(".note-snippets mark")).toHaveText("cool");
-  page.once("dialog", dialog => dialog.accept());
-  await page.getByRole("button", { name: "Delete Color study" }).click();
-  await expect(page.getByRole("article")).toHaveCount(0);
-  await page.reload(); await expect(page.getByRole("article")).toHaveCount(0);
+  await page.getByRole('button', { name: 'New note', exact: true }).click();
+  await page.getByLabel('Body', { exact: true }).fill('Keep this draft while searching');
+  await search.fill('no match');
+  await expect(page.getByLabel('Body', { exact: true })).toHaveValue('Keep this draft while searching');
+  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await search.fill('color');
+  await page.getByRole('link', { name: 'Color study', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Color study' }).click();
+  await page.getByLabel('Body', { exact: true }).fill('A cool palette');
+  await page.getByRole('button', { name: 'Save note', exact: true }).click();
+  await page.getByRole('link', { name: 'Back to saved notes' }).click();
+  await expect(search).toHaveValue('color');
+  await search.fill('cool');
+  await expect(page.locator('.note-snippets mark')).toHaveText('cool');
+  await page.getByRole('link', { name: 'Color study', exact: true }).click();
+  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Delete Color study' }).click();
+  await expect(page.getByRole('article')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Back to saved notes' }).click();
+  await expect(search).toHaveValue('cool');
+  await page.reload(); await expect(page.getByRole('article')).toHaveCount(0);
 });
 
 test("empty library stays useful during search and HTML-looking input stays plain text", async ({ page }) => {
