@@ -457,9 +457,16 @@ it. Clear/removal releases that copy. Shortlists reset when leaving the page.
 ## Project collections
 
 Open **Collections** to browse a responsive grid of project cards with names,
-tags and item counts. Select a card to open its contents and editing controls;
-**Close collection** returns focus to its card. **New collection** opens a name
-dialog: Enter creates it and opens its contents, while Cancel, Close or Escape
+tags and item counts. Select a card to browse its contents in an ordered grid
+with square previews, titles and item types. Titles open the source item. Image
+and texture cards use lazy thumbnails, note/PDF snippets stay bounded, and font
+previews load near the viewport and release their font faces when closed.
+**Edit collection** opens the name, tags, membership, ordering and deletion
+controls. **Back to collection** returns to the grid, asking before discarding
+unsaved edits. **Close collection** returns focus to its project card.
+
+**New collection** opens a name dialog: Enter creates it and opens its contents,
+while Cancel, Close or Escape
 returns to the button and keeps the name draft for this visit. Errors keep the
 dialog open for correction or retry. Then add existing notes, images, PDFs or
 saved fonts. Type/title filters narrow the candidate list. Membership changes and
@@ -472,7 +479,7 @@ to save its name/tags. Pending tag text must be added or cleared first. Tags use
 the same vocabulary as notes, images and PDFs; they do not tag collection
 members. The Collections page filters by name, tag and untagged status. An open
 collection remains available even when it falls outside the filters. Collections
-also appear in the shared **Tags** view with direct links back to their editor.
+also appear in the shared **Tags** view with direct links back to their contents.
 
 Removing membership or deleting a collection keeps all source items. Deleting a
 source removes its memberships and changes affected collection revisions; use
