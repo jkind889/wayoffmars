@@ -34,7 +34,7 @@ export async function importImage(input: Record<string, unknown>) {
   } catch { throw new Error('Image is damaged, animated, or exceeds 12,000 pixels per side / 24 megapixels. Choose a still PNG, JPEG or WebP.'); }
   const filename = typeof input.filename === 'string' ? input.filename.slice(0, 255) : 'Image';
   const now = Date.now();
-  const record: SavedImage = { ...imageFields({ title: filename.slice(0, IMAGE_LIMITS.title) || 'Image', source: '', description: '' }), id: digest(bytes), revision: randomUUID(), filename, byteSize: bytes.length, width: metadata.width!, height: metadata.height!, format: metadata.format as SavedImage['format'], createdAt: now, updatedAt: now };
+  const record: SavedImage = { ...imageFields({ title: filename.slice(0, IMAGE_LIMITS.title) || 'Image', source: '', description: '', texture: input.texture }), id: digest(bytes), revision: randomUUID(), filename, byteSize: bytes.length, width: metadata.width!, height: metadata.height!, format: metadata.format as SavedImage['format'], createdAt: now, updatedAt: now };
   const directory = dataDirectory(), db = openLibrary(directory);
   try {
     db.exec('BEGIN IMMEDIATE');

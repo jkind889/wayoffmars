@@ -286,3 +286,12 @@ summary { width: fit-content; padding-block: 10px; cursor: pointer; font-size: 1
 .note-pagination { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 16px 0; }
 .note-pagination label { display: grid; gap: 6px; }
 .note-pagination select { min-height: 40px; }
+
+/* Textures share image detail and collection controls. */
+.image-original, .image-collections { grid-column: 1 / -1; }
+.image-original a { display: inline-flex; align-items: center; text-decoration: none; }
+.image-collections { border-top: 1px solid var(--rule); padding-top: 16px; min-width: 0; }
+.note-editor label.texture-classification { display: flex; align-items: center; gap: 10px; }
+.note-editor .texture-classification input { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; }
+.texture-existing { margin-bottom: 24px; }
+.image-detail > .image-membership-hint { grid-column: 1 / -1; grid-row: auto; }
