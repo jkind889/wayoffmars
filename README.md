@@ -221,11 +221,15 @@ result reachable; search still covers all saved notes. **List** is the initial
 layout, with compact titles and tags. **Grid** arranges cards with short previews;
 it is not a draggable board. The choice is remembered in this browser when local
 storage is available. Changing views keeps the current search, page and draft.
-Open a note's title to read its body, source, citations and image links; **Edit**
-uses the existing editor. Only the opened note renders its full body. Direct note
-links select the correct page and open that note. Search also offers **Read full
-note** with full-body highlights on demand. Browser Find sees only rendered
-content; use the app search to find notes elsewhere in the library.
+Open a note's title (or **Read full note** in search) to visit its dedicated
+`/notes/[id]` page with the full body, source, citations and image links. **Edit**
+and **Delete** are available there, with the existing draft and confirmation
+protections. **Back to saved notes** restores the search/page context and the
+remembered list/grid layout. Search/page context also survives refresh through
+the URL. Old `#note-…` links still open the corresponding detail page. Missing
+notes offer a clear return path; failed reads are reported separately. Only the
+detail page renders a full body, with search highlights when opened from results.
+Browser Find sees only rendered content; use app search to find other notes.
 
 ## Checks
 
