@@ -102,7 +102,7 @@ export function ImageLibrary({ textures = false }: { textures?: boolean }) {
     } catch (error) { setError(`${(error as Error).message} Use Reload to refresh collections.`); }
     finally { lock.current = false; setBusy(false); detail.current?.focus(); }
   }
-  const visibleImages = images.filter(image => !textures || image.texture === true);
+  const visibleImages = images.filter(image => (image.texture === true) === textures);
   const imageTags = new Map(tags.records.filter(record => record.kind === 'images').map(record => [record.id, record.tags]));
   const collectionIds = new Set(collections.find(collection => collection.id === collectionFilter)?.members.filter(member => member.kind === 'images').map(member => member.id));
   const results = visibleImages.filter(image => `${image.title} ${image.description} ${image.filename}`.toLowerCase().includes(query.trim().toLowerCase()) && (!textures || (!tagFilter || imageTags.get(image.id)?.some(tag => tag.key === tagFilter)) && (!collectionFilter || collectionIds.has(image.id)))).sort((a,b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
@@ -113,7 +113,7 @@ export function ImageLibrary({ textures = false }: { textures?: boolean }) {
       <input ref={input} type="file" className="visually-hidden" tabIndex={-1} aria-label="Choose image" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" disabled={busy || loading} onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void importFile(file); }} />
     </div>
     {textures && <div className="texture-existing">
-      <p className="storage-note">Textures are images marked for reuse. They stay in Images and keep their tags and collections. To classify an existing image, open it below, check “Use as texture”, and save.</p>
+      <p className="storage-note">Textures appear here instead of in the Images gallery and keep their tags and collections. To classify an existing image, open it below, check “Use as texture”, and save.</p>
       <div className="link-form"><label>Existing image<select disabled={busy || loading} value={existing} onChange={event => setExisting(event.target.value)}><option value="">Choose an image to classify</option>{images.filter(image => !image.texture).map(image => <option key={image.id} value={image.id}>{image.title}</option>)}</select></label><button className="secondary-button" disabled={busy || loading || !images.some(image => image.id === existing && !image.texture)} onClick={() => { const image = images.find(image => image.id === existing); if (image) choose(image); }}>Review existing image</button></div>
     </div>}
     {duplicate && <p className="storage-note">The existing image was kept unchanged. <button className="secondary-button" disabled={busy} onClick={() => choose(images.find(image => image.id === duplicate.id) ?? duplicate)}>Review saved image</button></p>}
@@ -129,7 +129,7 @@ export function ImageLibrary({ textures = false }: { textures?: boolean }) {
         <label>Source URL <span className="field-hint">Optional; stored without fetching</span><input type="url" maxLength={IMAGE_LIMITS.source} value={fields.source} onChange={event => setFields({ ...fields, source: event.target.value })} /></label>
         <label>Why saved <span className="field-hint">Optional short description</span><textarea rows={3} maxLength={IMAGE_LIMITS.description} value={fields.description} onChange={event => setFields({ ...fields, description: event.target.value })} /></label>
         <label className="texture-classification"><input type="checkbox" checked={fields.texture === true} onChange={event => setFields({ ...fields, texture: event.target.checked })} />Use as texture</label>
-        <p className="storage-note">Uncheck to remove from Textures. The image, original file, tags, and collection memberships stay saved.</p>
+        <p className="storage-note">Check to show in Textures; uncheck to show in Images. The original file, tags, and collection memberships stay saved.</p>
         <div className="backup-actions"><button className="primary-button" type="submit">{busy ? 'Saving…' : 'Save image details'}</button><button className="secondary-button" type="button" onClick={() => void remove()}>Delete image</button></div>
       </fieldset><p className="storage-note">{dirty ? 'Unsaved edits. Save before closing this tab.' : 'Details are saved on this Mac.'}</p></form>
       <p><a href={`/tags?kind=images&id=${encodeURIComponent(selected.id)}`}>Manage shared tags</a></p>
@@ -145,7 +145,7 @@ export function ImageLibrary({ textures = false }: { textures?: boolean }) {
       <label>Texture tag<select value={tagFilter} onChange={event => setTagFilter(event.target.value)}><option value="">All tags</option>{tags.vocabulary.map(tag => <option key={tag.key} value={tag.key}>{tag.label}</option>)}</select></label>
       <label>Texture collection<select value={collectionFilter} onChange={event => setCollectionFilter(event.target.value)}><option value="">All collections</option>{collections.map(collection => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select></label>
     </div><button className="secondary-button" onClick={() => { setQuery(''); setTagFilter(''); setCollectionFilter(''); }}>Clear texture filters</button></fieldset>}
-    <div className="library-heading"><h2>{textures ? 'Saved textures' : 'Saved images'}</h2><span className="library-count">{textures ? `${results.length} of ${visibleImages.length} textures` : `${images.length} images`}</span></div>
+    <div className="library-heading"><h2>{textures ? 'Saved textures' : 'Saved images'}</h2><span className="library-count">{textures ? `${results.length} of ${visibleImages.length} textures` : `${visibleImages.length} images`}</span></div>
     {loading ? <p role="status">Loading your images…</p> : !visibleImages.length ? <p className="empty-state">{textures ? 'Import a texture or classify an existing image to start.' : 'Import your first image reference.'}</p> : !results.length ? <p className="empty-state">No images match these filters.</p> : <ul className="image-gallery">{results.map(image => <li key={image.id}>
       <ImagePreview id={image.id} title={image.title} /><CompareChoice name={image.title} selected={shortlist.ids.includes(image.id)} full={shortlist.ids.length >= 4} onClick={() => shortlist.toggle(image.id)} /><button className="secondary-button" disabled={busy} onClick={() => choose(image)}>Open {image.title}</button>{image.description && <p>{image.description}</p>}{textures && !!imageTags.get(image.id)?.length && <ul className="note-tags" aria-label="Tags">{imageTags.get(image.id)!.map(tag => <li key={tag.key}>{tag.label}</li>)}</ul>}
     </li>)}</ul>}
